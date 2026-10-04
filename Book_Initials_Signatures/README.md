@@ -163,9 +163,9 @@ carries 7 × 63 = **441 sets of initials**.
 Before building, the script prints the plan:
 
 ```
-Layout: A4, 7 column(s) × 63 line(s) = 441 initials per page
+Layout: A4, 7 column(s) x 63 line(s) = 441 initials per page
         10 pt font, 1.5 cm offsets, 1.5 cm between the initials, line spacing 1.2
-        252 page(s) in total
+        110,942 initials -> 252 page(s)
 ```
 
 ---

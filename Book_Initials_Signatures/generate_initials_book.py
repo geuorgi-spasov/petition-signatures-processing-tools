@@ -154,12 +154,12 @@ class Layout:
     def describe(self, total_initials: int) -> str:
         """A short summary, printed before the document is built."""
         return (
-            f"Layout: A4, {self.columns} column(s) × {self.lines_per_page} "
+            f"Layout: A4, {self.columns} column(s) x {self.lines_per_page} "
             f"line(s) = {self.initials_per_page:,} initials per page\n"
             f"        {self.font_size_pt:g} pt font, {self.margin_cm:g} cm "
             f"offsets, {self.column_gap_cm:g} cm between the initials, "
             f"line spacing {self.line_spacing:g}\n"
-            f"        {total_initials:,} initials → "
+            f"        {total_initials:,} initials -> "
             f"{self.pages_for(total_initials):,} page(s)"
         )
 
@@ -194,7 +194,7 @@ class Layout:
         if self.text_width_cm <= 0 or self.text_height_cm <= 0:
             raise LayoutError(
                 f"An offset of {self.margin_cm:g} cm on every side leaves no "
-                f"room on an A4 page ({PAGE_WIDTH_CM:g} × {PAGE_HEIGHT_CM:g} "
+                f"room on an A4 page ({PAGE_WIDTH_CM:g} x {PAGE_HEIGHT_CM:g} "
                 f"cm). Use less than {PAGE_WIDTH_CM / 2:g} cm."
             )
 
