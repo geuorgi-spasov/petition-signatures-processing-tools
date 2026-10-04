@@ -16,6 +16,7 @@ See README.md for the full workflow.
 
 from __future__ import annotations
 
+import argparse
 import glob
 import os
 import shutil
@@ -214,23 +215,58 @@ def _libreoffice_convert(src: str, dst: str) -> None:
             os.replace(produced, dst)
 
 
-def get_converter():
+def _word_converter():
+    """Return docx2pdf's ``convert``, which drives the installed Word."""
+    try:
+        from docx2pdf import convert
+    except ImportError:
+        print(
+            "ERROR: the 'docx2pdf' package isn't installed. Run "
+            "`pip install -r requirements.txt` and try again."
+        )
+        sys.exit(1)
+    print("  Converting with Microsoft Word.")
+    return convert
+
+
+def get_converter(prefer: str | None = None):
     """Return a ``convert(src, dst)`` callable for this computer.
 
-    Microsoft Word is used where it is installed, LibreOffice otherwise.
-    Exits with an explanation if neither is available.
+    Args:
+        prefer: ``"word"`` or ``"libreoffice"`` to insist on one of them,
+            or None to choose automatically — Word where it is installed,
+            LibreOffice otherwise.
+
+    Word is the default because it is the program the .docx format is
+    defined by, so its rendering is the reference. LibreOffice is several
+    times faster; ``--libreoffice`` is there for when that matters more.
+
+    Exits with an explanation if the chosen program is not available.
     """
-    if _find_word() is not None:
-        try:
-            from docx2pdf import convert
-        except ImportError:
+    if prefer == "word":
+        if _find_word() is None:
             print(
-                "ERROR: the 'docx2pdf' package isn't installed. Run "
-                "`pip install -r requirements.txt` and try again."
+                "ERROR: --word was asked for, but Microsoft Word is not "
+                "installed on this computer.\nLeave the option off to use "
+                "whatever is available."
             )
             sys.exit(1)
-        print("  Converting with Microsoft Word.")
-        return convert
+        return _word_converter()
+
+    if prefer == "libreoffice":
+        if _find_libreoffice() is None:
+            print(
+                "ERROR: --libreoffice was asked for, but LibreOffice is not "
+                "installed.\nGet it free from "
+                "https://www.libreoffice.org/download/, or leave the option "
+                "off to use whatever is available."
+            )
+            sys.exit(1)
+        print("  Converting with LibreOffice.")
+        return _libreoffice_convert
+
+    if _find_word() is not None:
+        return _word_converter()
 
     if _find_libreoffice() is not None:
         print("  Converting with LibreOffice.")
@@ -256,8 +292,30 @@ def get_converter():
 # Main
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    convert = get_converter()
+def build_arg_parser() -> argparse.ArgumentParser:
+    """The command line: which program should do the converting."""
+    parser = argparse.ArgumentParser(
+        description=(
+            f"Convert every .docx in '{INPUT_FOLDER}' to a PDF in "
+            f"'{OUTPUT_FOLDER}'. Already-converted files are skipped."
+        )
+    )
+    choice = parser.add_mutually_exclusive_group()
+    choice.add_argument(
+        "--word", dest="prefer", action="store_const", const="word",
+        help="Convert with Microsoft Word (the default where it is installed)",
+    )
+    choice.add_argument(
+        "--libreoffice", dest="prefer", action="store_const",
+        const="libreoffice",
+        help="Convert with LibreOffice instead — several times faster",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_arg_parser().parse_args(argv)
+    convert = get_converter(args.prefer)
 
     if not os.path.isdir(INPUT_FOLDER):
         print(f"ERROR: folder '{INPUT_FOLDER}' not found.")

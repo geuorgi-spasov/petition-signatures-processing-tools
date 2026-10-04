@@ -269,3 +269,47 @@ class TestGetConverter:
         with pytest.raises(SystemExit):
             converter.get_converter()
         assert "apt install libreoffice" in capsys.readouterr().out
+
+
+class TestChoosingTheConverterByHand:
+    def test_libreoffice_can_be_insisted_on_even_when_word_is_there(
+        self, monkeypatch
+    ):
+        monkeypatch.setattr(converter, "_find_word", lambda: r"C:\WINWORD.EXE")
+        monkeypatch.setattr(converter, "_find_libreoffice", lambda: "/usr/bin/soffice")
+        assert converter.get_converter("libreoffice") is converter._libreoffice_convert
+
+    def test_word_can_be_insisted_on_even_when_libreoffice_is_there(
+        self, monkeypatch
+    ):
+        fake_docx2pdf = types.ModuleType("docx2pdf")
+        fake_docx2pdf.convert = lambda src, dst=None: None
+        monkeypatch.setitem(sys.modules, "docx2pdf", fake_docx2pdf)
+        monkeypatch.setattr(converter, "_find_word", lambda: r"C:\WINWORD.EXE")
+        monkeypatch.setattr(converter, "_find_libreoffice", lambda: "/usr/bin/soffice")
+        assert converter.get_converter("word") is fake_docx2pdf.convert
+
+    def test_asking_for_word_without_word_says_so(self, monkeypatch, capsys):
+        monkeypatch.setattr(converter, "_find_word", lambda: None)
+        monkeypatch.setattr(converter, "_find_libreoffice", lambda: "/usr/bin/soffice")
+        with pytest.raises(SystemExit):
+            converter.get_converter("word")
+        assert "--word was asked for" in capsys.readouterr().out
+
+    def test_asking_for_libreoffice_without_it_says_so(self, monkeypatch, capsys):
+        monkeypatch.setattr(converter, "_find_word", lambda: r"C:\WINWORD.EXE")
+        monkeypatch.setattr(converter, "_find_libreoffice", lambda: None)
+        with pytest.raises(SystemExit):
+            converter.get_converter("libreoffice")
+        assert "libreoffice.org" in capsys.readouterr().out
+
+    @pytest.mark.parametrize(
+        "argv,expected",
+        [([], None), (["--word"], "word"), (["--libreoffice"], "libreoffice")],
+    )
+    def test_the_command_line_maps_to_a_preference(self, argv, expected):
+        assert converter.build_arg_parser().parse_args(argv).prefer == expected
+
+    def test_both_options_at_once_is_refused(self):
+        with pytest.raises(SystemExit):
+            converter.build_arg_parser().parse_args(["--word", "--libreoffice"])

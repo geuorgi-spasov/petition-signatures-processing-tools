@@ -13,7 +13,7 @@ if errorlevel 1 goto failed
 python split_signatures_into_folders.py
 if errorlevel 1 goto failed
 
-python convert_docx_to_pdf.py
+python convert_docx_to_pdf.py %*
 if errorlevel 1 goto failed
 
 echo.

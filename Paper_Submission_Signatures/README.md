@@ -153,6 +153,35 @@ otherwise — which is always the case on Linux. The script prints which
 one it is using. Either way the pending files are converted in a single
 batch so the tool starts only once.
 
+**You can choose instead.** LibreOffice is several times faster — on the
+order of 5 minutes against 40 for ~110 files — so if you have both, it is
+worth asking for it:
+
+```
+python convert_docx_to_pdf.py --libreoffice
+```
+
+```
+python convert_docx_to_pdf.py --word
+```
+
+Through the launcher, the option is passed straight through:
+`run.bat --libreoffice` or `./run.sh --libreoffice`.
+
+Word is the default because the .docx format is Word's own, so its
+rendering is the reference one — and it is what produced the documents
+that have been submitted so far. The practical difference is smaller than
+it sounds on Windows, where LibreOffice finds the same Arial and Cambria
+that Word uses. On Linux neither font is normally installed, and
+LibreOffice substitutes metric-compatible stand-ins (Liberation Sans for
+Arial, Caladea for Cambria) — the same character widths, so the page
+count and the layout are unaffected, but the letters are drawn slightly
+differently.
+
+If you have Word and want to know whether the two agree, convert one
+folder each way and compare the page counts. If they match, there is no
+reason not to use `--libreoffice` for every run.
+
 ---
 
 ## Customising the scripts
