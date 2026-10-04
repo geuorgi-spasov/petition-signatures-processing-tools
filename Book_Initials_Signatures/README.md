@@ -31,15 +31,18 @@ ask. The AI can explain how each part works or help you adapt it.
 
 ## Quick start
 
+Follow **one** of the two paths below — whichever matches your computer.
+
+### Windows and macOS
+
 1. **Install Python** from <https://www.python.org/downloads/>.
    On Windows, tick *"Add Python to PATH"* during the installation.
 
 2. **Install the font.** Double-click `bebasneuecyrillic.ttf` in this
-   folder and press *Install*. (Other ways:
-   [Installing the font](#installing-the-font).)
+   folder and press *Install*.
 
 3. **Install what the script needs.** Open PowerShell (Windows) or
-   Terminal (macOS/Linux) in this folder and run:
+   Terminal (macOS) in this folder and run:
 
    ```
    pip install -r requirements.txt
@@ -52,20 +55,42 @@ ask. The AI can explain how each part works or help you adapt it.
    python generate_initials_book.py
    ```
 
-   About 15 seconds for ~111,000 names. To see the page count without
-   writing anything, add `--dry-run`.
+### Linux
 
-> **On Linux?** Step 3 will refuse with
-> `error: externally-managed-environment`. Linux keeps its own Python
-> separate, so install into a folder of your own instead — run these
-> three lines in place of step 3, and the `source` line again in each
-> new terminal:
->
-> ```
-> python3 -m venv .venv
-> source .venv/bin/activate
-> pip install -r requirements.txt
-> ```
+1. **Install Python.**
+
+   ```
+   sudo apt install python3 python3-venv
+   ```
+
+2. **Install the font.**
+
+   ```
+   mkdir -p ~/.local/share/fonts && cp bebasneuecyrillic.ttf ~/.local/share/fonts/ && fc-cache -f
+   ```
+
+3. **Install what the script needs.** Open Terminal in this folder and
+   run these three lines. Linux keeps its own Python locked, so they
+   install into a `.venv` folder here instead of system-wide:
+
+   ```
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+   If you come back in a new terminal later, run the `source` line
+   again before step 4.
+
+4. **Run it.** Put your `book_signatures_only_names.csv` in this folder
+   and run:
+
+   ```
+   python generate_initials_book.py
+   ```
+
+Either way it takes about 15 seconds for ~111,000 names. To see the
+page count without writing anything, add `--dry-run`.
 
 The output `book_signatures_initials.docx` appears in the same folder.
 Print it, or export it to PDF from Word (*File → Save as → PDF*) — the
@@ -313,8 +338,7 @@ python tests/benchmark_initials_book.py --limit 20000
   instead.
 - **`error: externally-managed-environment`** (Linux) — your
   distribution blocks installing packages into the system Python. Use
-  the three lines in the **On Linux?** note at the end of
-  [Quick start](#quick-start) instead. This is the recommended fix.
+  the [Linux steps](#linux) in Quick start instead. This is the recommended fix.
 - **The initials look wrong only on Linux** — the installed font may
   register under a slightly different family name. Run
   `fc-list | grep -i bebas` and set `FONT_NAME` in the script to match
