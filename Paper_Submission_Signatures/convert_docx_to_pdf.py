@@ -16,6 +16,7 @@ See README.md for the full workflow.
 
 from __future__ import annotations
 
+import glob
 import os
 import shutil
 import sys
@@ -100,12 +101,44 @@ def verify_conversion_results(
 # Conversion backends (cross-platform)
 # ---------------------------------------------------------------------------
 #
-# On Windows and macOS the ``docx2pdf`` package drives Microsoft Word.
-# On Linux, ``docx2pdf`` does not work (there is no Word), so we drive
-# LibreOffice in headless mode instead. ``get_converter()`` picks the
-# right backend for the current platform and returns a ``convert(src, dst)``
+# Microsoft Word gives the best fidelity, so it is preferred wherever it is
+# installed; the ``docx2pdf`` package drives it on Windows and macOS. When
+# Word is not there - always on Linux, and on any Windows or Mac without the
+# desktop Word application - LibreOffice is driven in headless mode instead.
+# ``get_converter()`` picks a backend and returns a ``convert(src, dst)``
 # style callable with the same folder-in / folder-out contract docx2pdf
 # uses, so the rest of ``main()`` doesn't need to care which backend runs.
+
+
+def _program_files_dirs() -> list[str]:
+    """The Program Files folders on Windows, whatever drive they are on."""
+    found = [
+        os.environ.get("ProgramFiles", r"C:\Program Files"),
+        os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+    ]
+    return [directory for directory in found if directory]
+
+
+def _find_word() -> str | None:
+    """Return the path to the Microsoft Word application, or None.
+
+    Only the installed desktop application counts - ``docx2pdf`` automates
+    it, so a Microsoft 365 subscription used only through office.com in a
+    browser cannot be used.
+    """
+    if sys.platform == "darwin":
+        app = "/Applications/Microsoft Word.app"
+        return app if os.path.exists(app) else None
+    if not sys.platform.startswith("win"):
+        return None
+
+    for directory in _program_files_dirs():
+        for pattern in ("Microsoft Office/root/Office*/WINWORD.EXE",
+                        "Microsoft Office/Office*/WINWORD.EXE"):
+            matches = glob.glob(os.path.join(directory, pattern))
+            if matches:
+                return matches[0]
+    return shutil.which("winword")
 
 
 def _find_libreoffice() -> str | None:
@@ -114,6 +147,17 @@ def _find_libreoffice() -> str | None:
         path = shutil.which(name)
         if path:
             return path
+
+    # On Windows and macOS LibreOffice is not normally on the PATH, so look
+    # where its installer puts it.
+    candidates = ["/Applications/LibreOffice.app/Contents/MacOS/soffice"]
+    candidates += [
+        os.path.join(directory, "LibreOffice", "program", "soffice.exe")
+        for directory in _program_files_dirs()
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
     return None
 
 
@@ -171,12 +215,12 @@ def _libreoffice_convert(src: str, dst: str) -> None:
 
 
 def get_converter():
-    """Return a ``convert(src, dst)`` callable for the current platform.
+    """Return a ``convert(src, dst)`` callable for this computer.
 
-    Windows / macOS  -> docx2pdf (Microsoft Word)
-    Linux            -> LibreOffice headless
+    Microsoft Word is used where it is installed, LibreOffice otherwise.
+    Exits with an explanation if neither is available.
     """
-    if sys.platform.startswith(("win", "darwin")):
+    if _find_word() is not None:
         try:
             from docx2pdf import convert
         except ImportError:
@@ -185,17 +229,27 @@ def get_converter():
                 "`pip install -r requirements.txt` and try again."
             )
             sys.exit(1)
+        print("  Converting with Microsoft Word.")
         return convert
 
-    # Linux (and any other platform): use LibreOffice.
-    if _find_libreoffice() is None:
+    if _find_libreoffice() is not None:
+        print("  Converting with LibreOffice.")
+        return _libreoffice_convert
+
+    if sys.platform.startswith(("win", "darwin")):
+        print(
+            "ERROR: no program found that can turn .docx files into PDFs.\n"
+            "Either install Microsoft Word (the desktop application - the\n"
+            "browser version at office.com cannot be used), or install\n"
+            "LibreOffice, which is free: https://www.libreoffice.org/download/"
+        )
+    else:
         print(
             "ERROR: LibreOffice not found. On Linux the conversion uses "
             "LibreOffice in headless mode.\nInstall it with e.g. "
             "`sudo apt install libreoffice` and try again."
         )
-        sys.exit(1)
-    return _libreoffice_convert
+    sys.exit(1)
 
 
 # ---------------------------------------------------------------------------

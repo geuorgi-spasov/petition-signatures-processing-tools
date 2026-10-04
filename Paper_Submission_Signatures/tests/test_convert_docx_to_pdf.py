@@ -7,6 +7,12 @@ post-conversion verification.
 """
 from __future__ import annotations
 
+import sys
+import types
+
+import pytest
+
+import convert_docx_to_pdf as converter
 from convert_docx_to_pdf import (
     discover_conversion_jobs,
     is_word_lock_file,
@@ -191,3 +197,75 @@ class TestVerifyConversionResults:
         )
         assert successful == ["Папка 1 с подписи от 1 до 1000.docx"]
         assert failed == ["Папка 2 с подписи от 1001 до 2000.docx"]
+
+
+# ---------------------------------------------------------------------------
+# Choosing a conversion backend
+# ---------------------------------------------------------------------------
+
+class TestFindWord:
+    def test_finds_word_where_the_windows_installer_puts_it(
+        self, monkeypatch, tmp_path
+    ):
+        word = tmp_path / "Microsoft Office" / "root" / "Office16" / "WINWORD.EXE"
+        word.parent.mkdir(parents=True)
+        word.touch()
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(converter, "_program_files_dirs", lambda: [str(tmp_path)])
+        assert converter._find_word() == str(word)
+
+    def test_no_word_on_linux(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        assert converter._find_word() is None
+
+
+class TestFindLibreOffice:
+    def test_finds_libreoffice_where_the_windows_installer_puts_it(
+        self, monkeypatch, tmp_path
+    ):
+        soffice = tmp_path / "LibreOffice" / "program" / "soffice.exe"
+        soffice.parent.mkdir(parents=True)
+        soffice.touch()
+        monkeypatch.setattr(converter.shutil, "which", lambda name: None)
+        monkeypatch.setattr(converter, "_program_files_dirs", lambda: [str(tmp_path)])
+        assert converter._find_libreoffice() == str(soffice)
+
+    def test_prefers_whatever_is_on_the_path(self, monkeypatch):
+        monkeypatch.setattr(converter.shutil, "which",
+                            lambda name: "/usr/bin/soffice")
+        assert converter._find_libreoffice() == "/usr/bin/soffice"
+
+
+class TestGetConverter:
+    def test_prefers_word_when_it_is_installed(self, monkeypatch):
+        fake_docx2pdf = types.ModuleType("docx2pdf")
+        fake_docx2pdf.convert = lambda src, dst=None: None
+        monkeypatch.setitem(sys.modules, "docx2pdf", fake_docx2pdf)
+        monkeypatch.setattr(converter, "_find_word", lambda: r"C:\WINWORD.EXE")
+        assert converter.get_converter() is fake_docx2pdf.convert
+
+    def test_falls_back_to_libreoffice_when_word_is_missing(self, monkeypatch):
+        monkeypatch.setattr(converter, "_find_word", lambda: None)
+        monkeypatch.setattr(converter, "_find_libreoffice", lambda: "/usr/bin/soffice")
+        assert converter.get_converter() is converter._libreoffice_convert
+
+    def test_windows_without_either_names_both_options(self, monkeypatch, capsys):
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(converter, "_find_word", lambda: None)
+        monkeypatch.setattr(converter, "_find_libreoffice", lambda: None)
+        with pytest.raises(SystemExit):
+            converter.get_converter()
+        message = capsys.readouterr().out
+        assert "Microsoft Word" in message
+        assert "libreoffice.org" in message
+        assert "office.com" in message
+
+    def test_linux_without_libreoffice_says_how_to_install_it(
+        self, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setattr(converter, "_find_word", lambda: None)
+        monkeypatch.setattr(converter, "_find_libreoffice", lambda: None)
+        with pytest.raises(SystemExit):
+            converter.get_converter()
+        assert "apt install libreoffice" in capsys.readouterr().out

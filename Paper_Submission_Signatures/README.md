@@ -38,12 +38,22 @@ The sample data is synthetic and anonymised and contains no real personal inform
 
 1. Install Python 3.9+ from <https://www.python.org/downloads/>
    (on Windows, tick *"Add Python to PATH"* during installation).
-2. Install the tool that does the .docx → PDF conversion in step 2:
-   - **Windows / macOS:** Microsoft Word (the `docx2pdf` package
-     drives it).
-   - **Linux:** LibreOffice — `sudo apt install libreoffice`. On Linux
-     the script uses LibreOffice in headless mode; `docx2pdf` and
-     Microsoft Word are **not** used or required.
+2. Make sure this computer can turn `.docx` files into PDFs. Only the
+   second script needs this — the first one doesn't.
+
+   - **If you already have Microsoft Word installed, there is nothing
+     to do here.** The script uses Word when it finds it.
+     Word in a browser (office.com) does *not* count — the script opens
+     the Word program on this computer.
+   - **Otherwise, install LibreOffice**, which is free and works on
+     Windows, macOS and Linux:
+     <https://www.libreoffice.org/download/>. On Linux you can instead
+     run `sudo apt install libreoffice`.
+
+   You don't need to install anything called `docx2pdf` — step 3 does
+   that for you. When the second script runs it prints which of the two
+   it is using, and if it finds neither it tells you so before doing any
+   work.
 3. Open PowerShell (Windows) or Terminal (macOS/Linux) **in this
    folder** and install the Python dependencies. A virtual environment
    is recommended on every OS and is **required on most current Linux
@@ -137,10 +147,11 @@ every `.docx` from `signatures_docx/` and writes the matching `.pdf`
 into `signatures_pdf/`. Any file whose `.pdf` already exists is
 skipped, so this is safe to re-run.
 
-The conversion backend is chosen automatically for your platform:
-Microsoft Word (via `docx2pdf`) on Windows and macOS, and LibreOffice
-in headless mode on Linux. Either way the pending files are converted
-in a single batch so the converter starts only once.
+The conversion tool is chosen automatically: Microsoft Word (via
+`docx2pdf`) wherever it is installed, and LibreOffice in headless mode
+otherwise — which is always the case on Linux. The script prints which
+one it is using. Either way the pending files are converted in a single
+batch so the tool starts only once.
 
 ---
 
@@ -176,8 +187,8 @@ step 2.
 ## Performance
 
 The slow part of this workflow is the .docx → .pdf conversion, because
-the converter (Microsoft Word on Windows/macOS, LibreOffice on Linux)
-has to render each document, and starting the converter has a cost.
+the converter (Microsoft Word where it is installed, LibreOffice
+otherwise) has to render each document, and starting it has a cost.
 
 `convert_docx_to_pdf.py` converts **every pending file in a single
 batch**: it stages the pending .docx files in a temporary folder and
@@ -211,8 +222,8 @@ so you can see exactly how long the run took.
 
 `benchmark_conversion.py` runs both strategies (per-file vs batch) on
 the same files and reports the speedup. It uses the same conversion
-backend as the main workflow — Microsoft Word on Windows/macOS,
-LibreOffice on Linux — so it works on every platform. Run it after
+backend as the main workflow — Word where it is installed, LibreOffice
+otherwise — so it works on every platform. Run it after
 step 1 has produced some .docx files:
 
 ```
@@ -260,12 +271,12 @@ A successful run looks like:
 
 ```
 ======================== test session starts ========================
-collected 27 items
+collected 35 items
 
-tests/test_convert_docx_to_pdf.py ................                [ 59%]
+tests/test_convert_docx_to_pdf.py ........................         [ 68%]
 tests/test_split_signatures.py ...........                       [100%]
 
-======================== 27 passed in 0.6s ==========================
+======================== 35 passed in 6.3s ==========================
 ```
 
 ---
@@ -287,12 +298,14 @@ tests/test_split_signatures.py ...........                       [100%]
 - **`ERROR: the 'docx2pdf' package isn't installed`** (Windows/macOS)
   — run `pip install -r requirements.txt`.
 - **`ERROR: LibreOffice not found`** (Linux) — install it with
-  `sudo apt install libreoffice`. On Linux the conversion uses
-  LibreOffice, not `docx2pdf`/Word.
-- **Step 2 hangs or errors out** — the conversion tool for your
-  platform (Microsoft Word on Windows/macOS, LibreOffice on Linux)
-  must be installed and able to open .docx files. On Windows, close
-  any open Word windows before running.
+  `sudo apt install libreoffice`.
+- **`ERROR: no program found that can turn .docx files into PDFs`**
+  (Windows/macOS) — neither Microsoft Word nor LibreOffice is
+  installed. Install either one; LibreOffice is free, see
+  [Quick start](#quick-start) step 2.
+- **Step 2 hangs or errors out** — the tool it reported using (Word or
+  LibreOffice) must be able to open .docx files. On Windows, close any
+  open Word windows before running.
 - **`error: externally-managed-environment`** (Linux) — your
   distribution blocks installing packages into the system Python. Use
   the virtual environment shown in [Quick start](#quick-start)
