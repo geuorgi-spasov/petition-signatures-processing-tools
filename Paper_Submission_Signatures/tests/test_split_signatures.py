@@ -5,16 +5,16 @@ import pandas as pd
 import pytest
 
 from split_signatures_into_folders import (
-    DEFAULT_COLUMN_WIDTHS_IN,
-    LEFT_MARGIN_IN,
-    PAGE_WIDTH_IN,
-    RIGHT_MARGIN_IN,
+    DEFAULT_COLUMN_WIDTHS_CM,
+    LEFT_MARGIN_CM,
+    PAGE_WIDTH_CM,
+    RIGHT_MARGIN_CM,
     build_folder_document,
     read_signatures_csv,
     scale_column_widths,
 )
 
-AVAILABLE_WIDTH_IN = PAGE_WIDTH_IN - LEFT_MARGIN_IN - RIGHT_MARGIN_IN
+AVAILABLE_WIDTH_CM = PAGE_WIDTH_CM - LEFT_MARGIN_CM - RIGHT_MARGIN_CM
 
 
 # ---------------------------------------------------------------------------
@@ -25,28 +25,28 @@ class TestScaleColumnWidths:
     def test_six_columns_fills_available_width(self):
         widths = scale_column_widths(6)
         assert len(widths) == 6
-        assert sum(widths) == pytest.approx(AVAILABLE_WIDTH_IN)
+        assert sum(widths) == pytest.approx(AVAILABLE_WIDTH_CM)
 
     def test_six_columns_preserves_default_proportions(self):
         widths = scale_column_widths(6)
-        ratios = [w / d for w, d in zip(widths, DEFAULT_COLUMN_WIDTHS_IN)]
+        ratios = [w / d for w, d in zip(widths, DEFAULT_COLUMN_WIDTHS_CM)]
         for r in ratios[1:]:
             assert r == pytest.approx(ratios[0])
 
     def test_fewer_columns_uses_first_n_defaults(self):
         widths = scale_column_widths(3)
         assert len(widths) == 3
-        assert sum(widths) == pytest.approx(AVAILABLE_WIDTH_IN)
+        assert sum(widths) == pytest.approx(AVAILABLE_WIDTH_CM)
 
     def test_more_columns_than_defaults_distributes_evenly(self):
         widths = scale_column_widths(8)
         assert len(widths) == 8
         assert all(w == pytest.approx(widths[0]) for w in widths)
-        assert sum(widths) == pytest.approx(AVAILABLE_WIDTH_IN)
+        assert sum(widths) == pytest.approx(AVAILABLE_WIDTH_CM)
 
     def test_one_column_takes_full_width(self):
         widths = scale_column_widths(1)
-        assert widths == pytest.approx([AVAILABLE_WIDTH_IN])
+        assert widths == pytest.approx([AVAILABLE_WIDTH_CM])
 
 
 # ---------------------------------------------------------------------------

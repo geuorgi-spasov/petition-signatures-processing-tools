@@ -1,7 +1,7 @@
 """
 Splits a raw CSV export of signatures into multiple Word documents for
 paper submission. Each document contains ROWS_PER_FILE signatures
-(default: 1000), laid out ROWS_PER_PAGE per landscape page (default: 10),
+(default: 1000), laid out ROWS_PER_PAGE per A4 landscape page (default: 10),
 with a footer that page-numbers continuously across all files.
 
 All generated .docx files are written into OUTPUT_DOCX_FOLDER, which is
@@ -30,7 +30,7 @@ from docx.enum.table import (
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt
+from docx.shared import Cm, Pt
 from docx.table import Table
 
 # ---------------------------------------------------------------------------
@@ -44,16 +44,16 @@ OUTPUT_DOCX_FOLDER = "signatures_docx"
 ROWS_PER_FILE = 1000   # signatures per submission folder/document
 ROWS_PER_PAGE = 10     # data rows per printed page
 
-# Page layout (landscape US Letter)
-PAGE_WIDTH_IN = 11.0
-PAGE_HEIGHT_IN = 8.5
-LEFT_MARGIN_IN = 0.75
-RIGHT_MARGIN_IN = 0.75
-TOP_MARGIN_IN = 0.75
-BOTTOM_MARGIN_IN = 1.0
+# Page layout, in centimeters (A4 landscape — the paper this is printed on)
+PAGE_WIDTH_CM = 29.7
+PAGE_HEIGHT_CM = 21.0
+LEFT_MARGIN_CM = 2.0
+RIGHT_MARGIN_CM = 2.0
+TOP_MARGIN_CM = 1.5
+BOTTOM_MARGIN_CM = 2.0
 
 # Row layout
-ROW_HEIGHT_IN = 0.52
+ROW_HEIGHT_CM = 1.3
 BODY_FONT = "Arial"
 FOOTER_FONT = "Cambria"
 BODY_FONT_SIZE_PT = 12
@@ -61,9 +61,10 @@ BODY_FONT_SIZE_PT = 12
 # Footer text (Bulgarian)
 ORGANIZATION_NAME = 'Сдружение „Невидими животни"'
 
-# Column widths in inches, tuned for a 6-column CSV. The numbers are scaled
-# so their total exactly fills the available page width.
-DEFAULT_COLUMN_WIDTHS_IN = [0.70, 1.36, 1.45, 3.44, 1.31, 1.19]
+# Column widths in centimeters, tuned for a 6-column CSV. Only their
+# proportions matter: they are scaled so their total exactly fills the
+# available page width.
+DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 
 # Encodings and separators tried when auto-detecting the CSV format
 CSV_SEPARATORS = [",", ";", "\t", "|"]
@@ -131,18 +132,18 @@ def read_signatures_csv(path: str) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def scale_column_widths(num_columns: int) -> list[float]:
-    """Return column widths in inches that fit the available page width."""
-    available_in = PAGE_WIDTH_IN - LEFT_MARGIN_IN - RIGHT_MARGIN_IN
+    """Return column widths in centimeters that fit the available width."""
+    available_cm = PAGE_WIDTH_CM - LEFT_MARGIN_CM - RIGHT_MARGIN_CM
 
-    if num_columns == len(DEFAULT_COLUMN_WIDTHS_IN):
-        widths = DEFAULT_COLUMN_WIDTHS_IN
-    elif num_columns < len(DEFAULT_COLUMN_WIDTHS_IN):
-        widths = DEFAULT_COLUMN_WIDTHS_IN[:num_columns]
+    if num_columns == len(DEFAULT_COLUMN_WIDTHS_CM):
+        widths = DEFAULT_COLUMN_WIDTHS_CM
+    elif num_columns < len(DEFAULT_COLUMN_WIDTHS_CM):
+        widths = DEFAULT_COLUMN_WIDTHS_CM[:num_columns]
     else:
         # More columns than we have presets for: distribute evenly
-        return [available_in / num_columns] * num_columns
+        return [available_cm / num_columns] * num_columns
 
-    scale = available_in / sum(widths)
+    scale = available_cm / sum(widths)
     return [w * scale for w in widths]
 
 
@@ -185,12 +186,12 @@ def create_landscape_document() -> DocumentType:
 
     section = doc.sections[0]
     section.orientation = WD_ORIENT.LANDSCAPE
-    section.page_width = Inches(PAGE_WIDTH_IN)
-    section.page_height = Inches(PAGE_HEIGHT_IN)
-    section.left_margin = Inches(LEFT_MARGIN_IN)
-    section.right_margin = Inches(RIGHT_MARGIN_IN)
-    section.top_margin = Inches(TOP_MARGIN_IN)
-    section.bottom_margin = Inches(BOTTOM_MARGIN_IN)
+    section.page_width = Cm(PAGE_WIDTH_CM)
+    section.page_height = Cm(PAGE_HEIGHT_CM)
+    section.left_margin = Cm(LEFT_MARGIN_CM)
+    section.right_margin = Cm(RIGHT_MARGIN_CM)
+    section.top_margin = Cm(TOP_MARGIN_CM)
+    section.bottom_margin = Cm(BOTTOM_MARGIN_CM)
 
     return doc
 
@@ -207,7 +208,7 @@ def add_page_table(
 
     for i, width in enumerate(column_widths):
         if i < len(table.columns):
-            table.columns[i].width = Inches(width)
+            table.columns[i].width = Cm(width)
 
     # Header row: bold, centered, body font size
     for i, col_name in enumerate(header):
@@ -235,7 +236,7 @@ def add_page_table(
     # Fixed row height with vertically centered cells
     for row in table.rows:
         row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
-        row.height = Inches(ROW_HEIGHT_IN)
+        row.height = Cm(ROW_HEIGHT_CM)
         for cell in row.cells:
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
@@ -313,7 +314,7 @@ def main() -> None:
 
     header = df.columns.tolist()
     column_widths = scale_column_widths(len(header))
-    print(f"Column widths (inches): {[round(w, 2) for w in column_widths]}")
+    print(f"Column widths (cm): {[round(w, 2) for w in column_widths]}")
 
     os.makedirs(OUTPUT_DOCX_FOLDER, exist_ok=True)
     print(f"Writing output into '{OUTPUT_DOCX_FOLDER}/'.")

@@ -4,7 +4,7 @@ Two Python scripts that turn a raw database export of signatures into
 PDFs ready for paper submission:
 
 1. **`split_signatures_into_folders.py`** — splits the export into Word
-   documents of 1000 signatures each (10 rows per landscape page), and
+   documents of 1000 signatures each (10 rows per A4 landscape page), and
    writes them into `signatures_docx/`. Each page footer reads
    `Стр. X, папка Y` and `Сдружение „Невидими животни"`.
 2. **`convert_docx_to_pdf.py`** — converts every `.docx` in
@@ -119,7 +119,7 @@ signatures_docx/Папка 2 с подписи от <first-id> до <last-id>.do
 …
 ```
 
-Each landscape page contains 10 rows. The footer shows a page number
+Each A4 landscape page (29.7 × 21.0 cm) contains 10 rows. The footer shows a page number
 that runs *continuously across all folders* (`Стр. 1, папка 1` …
 `Стр. 100, папка 1`, then `Стр. 101, папка 2` …) followed by the
 organisation name.
@@ -155,13 +155,13 @@ variables. Edit, save, and re-run.
 - `OUTPUT_DOCX_FOLDER` — where the `.docx` files are written
   (default `"signatures_docx"`)
 - `ROWS_PER_FILE`, `ROWS_PER_PAGE` — grouping (defaults 1000 and 10)
-- `PAGE_WIDTH_IN`, `PAGE_HEIGHT_IN` and the four margin constants —
-  page layout
-- `ROW_HEIGHT_IN` — height of each table row in inches
+- `PAGE_WIDTH_CM`, `PAGE_HEIGHT_CM` and the four margin constants —
+  page layout, in centimeters
+- `ROW_HEIGHT_CM` — height of each table row in centimeters
 - `BODY_FONT`, `FOOTER_FONT`, `BODY_FONT_SIZE_PT` — fonts
+- `DEFAULT_COLUMN_WIDTHS_CM` — preset column widths in centimeters,
+  tuned for 6 columns and auto-scaled to fit the page
 - `ORGANIZATION_NAME` — text printed at the bottom of every page
-- `DEFAULT_COLUMN_WIDTHS_IN` — preset widths tuned for 6 columns,
-  auto-scaled to fit the page
 
 **`convert_docx_to_pdf.py`** exposes:
 
@@ -216,13 +216,13 @@ LibreOffice on Linux — so it works on every platform. Run it after
 step 1 has produced some .docx files:
 
 ```
-python benchmark_conversion.py
+python tests/benchmark_conversion.py
 ```
 
 Or, to do a quick check with only the first 10 files:
 
 ```
-python benchmark_conversion.py --limit 10
+python tests/benchmark_conversion.py --limit 10
 ```
 
 You'll get output similar to:
@@ -252,7 +252,7 @@ To run them (with the virtual environment from
 [Quick start](#quick-start) active):
 
 ```
-pip install -r test_requirements.txt
+pip install -r tests/test_requirements.txt
 python -m pytest
 ```
 
@@ -311,16 +311,15 @@ diagnose it from the script and the message alone.
 ## Folder layout
 
 ```
-paper_submission/
+Paper_Submission_Signatures/
 ├── README.md
-├── .gitignore
 ├── requirements.txt
-├── test_requirements.txt                   (extras for running tests)
 ├── split_signatures_into_folders.py
 ├── convert_docx_to_pdf.py
-├── benchmark_conversion.py                 (optional, for measuring speed)
 ├── tests/
 │   ├── conftest.py
+│   ├── test_requirements.txt               (extras for running tests)
+│   ├── benchmark_conversion.py             (optional, for measuring speed)
 │   ├── test_split_signatures.py
 │   └── test_convert_docx_to_pdf.py
 ├── Signatures_from_the_database_raw.csv    (your input)
