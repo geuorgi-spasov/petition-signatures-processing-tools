@@ -31,55 +31,41 @@ ask. The AI can explain how each part works or help you adapt it.
 
 ## Quick start
 
-1. Install Python 3.9+ from <https://www.python.org/downloads/>
-   (on Windows, tick *"Add Python to PATH"* during installation).
-2. Install the bundled **Bebas Neue Cyrillic** font
-   (`bebasneuecyrillic.ttf`) — see [Installing the font](#installing-the-font).
-3. Open PowerShell (Windows) or Terminal (macOS/Linux) **in this
-   folder** and install the dependencies. Using a virtual environment
-   is recommended on every OS, and is **required on most current Linux
-   distributions** (Debian/Ubuntu/Mint 24+), which block installing
-   into the system Python:
+1. **Install Python** from <https://www.python.org/downloads/>.
+   On Windows, tick *"Add Python to PATH"* during the installation.
 
-   **Linux / macOS:**
+2. **Install the font.** Double-click `bebasneuecyrillic.ttf` in this
+   folder and press *Install*. (Other ways:
+   [Installing the font](#installing-the-font).)
+
+3. **Install what the script needs.** Open PowerShell (Windows) or
+   Terminal (macOS/Linux) in this folder and run:
+
    ```
-   python3 -m venv .venv
-   source .venv/bin/activate
    pip install -r requirements.txt
    ```
 
-   **Windows (PowerShell):**
-   ```
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
-   ```
-
-   The virtual environment lives in a `.venv/` folder next to the
-   script. Activate it once per terminal session (run the `activate`
-   line again in a new terminal) — you'll see `(.venv)` at the start
-   of your prompt when it's active.
-
-   > If you prefer not to use a virtual environment on Linux and
-   > understand the risk, you can instead run
-   > `pip install -r requirements.txt --break-system-packages`, but the
-   > virtual environment above is the clean, recommended approach.
-
-4. Put your CSV file `book_signatures_only_names.csv` next to the
-   script and run (with the virtual environment active):
+4. **Run it.** Put your `book_signatures_only_names.csv` in this folder
+   and run:
 
    ```
    python generate_initials_book.py
    ```
 
-   With the defaults a list of ~111,000 names takes about 15 seconds and
-   produces a 378-page A5 book.
+   About 15 seconds for ~111,000 names. To see the page count without
+   writing anything, add `--dry-run`.
 
-   To see the layout and the page count *without* writing anything:
-
-   ```
-   python generate_initials_book.py --dry-run
-   ```
+> **On Linux?** Step 3 will refuse with
+> `error: externally-managed-environment`. Linux keeps its own Python
+> separate, so install into a folder of your own instead — run these
+> three lines in place of step 3, and the `source` line again in each
+> new terminal:
+>
+> ```
+> python3 -m venv .venv
+> source .venv/bin/activate
+> pip install -r requirements.txt
+> ```
 
 The output `book_signatures_initials.docx` appears in the same folder.
 Print it, or export it to PDF from Word (*File → Save as → PDF*) — the
@@ -266,8 +252,7 @@ and an impossible layout in the same place.
 
 The project ships with a small `pytest` suite covering the initials, the
 CSV reading, the layout maths and its limits, and the document that comes
-out. To run it (with the virtual environment from
-[Quick start](#quick-start) active):
+out. To run it:
 
 ```
 pip install -r tests/test_requirements.txt
@@ -328,9 +313,8 @@ python tests/benchmark_initials_book.py --limit 20000
   instead.
 - **`error: externally-managed-environment`** (Linux) — your
   distribution blocks installing packages into the system Python. Use
-  the virtual environment shown in [Quick start](#quick-start)
-  (`python3 -m venv .venv && source .venv/bin/activate`) and run `pip`
-  inside it. This is the recommended fix.
+  the three lines in the **On Linux?** note at the end of
+  [Quick start](#quick-start) instead. This is the recommended fix.
 - **The initials look wrong only on Linux** — the installed font may
   register under a slightly different family name. Run
   `fc-list | grep -i bebas` and set `FONT_NAME` in the script to match
@@ -359,6 +343,6 @@ Book_Initials_Signatures/
 └── book_signatures_initials.docx           (the generated output)
 ```
 
-> The `.venv/` folder (created by the Quick start) and the generated
+> The `.venv/` folder (if you made one on Linux) and the generated
 > `book_signatures_initials.docx` are intentionally excluded from
 > version control by the `.gitignore` at the root of the repository.

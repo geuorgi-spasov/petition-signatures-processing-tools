@@ -36,73 +36,54 @@ The sample data is synthetic and anonymised and contains no real personal inform
 
 ## Quick start
 
-1. Install Python 3.9+ from <https://www.python.org/downloads/>
-   (on Windows, tick *"Add Python to PATH"* during installation).
-2. Make sure this computer can turn `.docx` files into PDFs. Only the
-   second script needs this — the first one doesn't.
+1. **Install Python** from <https://www.python.org/downloads/>.
+   On Windows, tick *"Add Python to PATH"* during the installation.
 
-   - **If you already have Microsoft Word installed, there is nothing
-     to do here.** The script uses Word when it finds it.
-     Word in a browser (office.com) does *not* count — the script opens
-     the Word program on this computer.
-   - **Otherwise, install LibreOffice**, which is free and works on
-     Windows, macOS and Linux:
-     <https://www.libreoffice.org/download/>. On Linux you can instead
-     run `sudo apt install libreoffice`.
+2. **Check you can make PDFs.** If you have Microsoft Word on this
+   computer, there is nothing to do. If you don't, install
+   [LibreOffice](https://www.libreoffice.org/download/) — it's free.
+   (Word in a browser at office.com doesn't count; the script opens the
+   Word program itself.)
 
-   You don't need to install anything called `docx2pdf` — step 3 does
-   that for you. When the second script runs it prints which of the two
-   it is using, and if it finds neither it tells you so before doing any
-   work.
-3. Open PowerShell (Windows) or Terminal (macOS/Linux) **in this
-   folder** and install the Python dependencies. A virtual environment
-   is recommended on every OS and is **required on most current Linux
-   distributions** (Debian/Ubuntu/Mint 24+), which block installing
-   into the system Python:
+3. **Install what the scripts need.** Open PowerShell (Windows) or
+   Terminal (macOS/Linux) in this folder and run:
 
-   **Linux / macOS:**
+   ```
+   pip install -r requirements.txt
+   ```
 
-       python3 -m venv .venv
-       source .venv/bin/activate
-       pip install -r requirements.txt
+4. **Run the first script.** Put your
+   `Signatures_from_the_database_raw.csv` in this folder and run:
 
-   **Windows (PowerShell):**
+   ```
+   python split_signatures_into_folders.py
+   ```
 
-       python -m venv .venv
-       .\.venv\Scripts\Activate.ps1
-       pip install -r requirements.txt
+   This fills `signatures_docx/` with one Word file per 1000
+   signatures. About 13 minutes for 111 files.
 
-   Activate the environment once per terminal session (run the
-   `activate` line again in a new terminal) — you'll see `(.venv)` at
-   the start of your prompt when it's active.
+5. **Run the second script.**
 
-   > If you prefer not to use a virtual environment on Linux and
-   > understand the risk, you can instead run
-   > `pip install -r requirements.txt --break-system-packages`, but the
-   > virtual environment above is the clean, recommended approach.
+   ```
+   python convert_docx_to_pdf.py
+   ```
 
-4. Put your CSV `Signatures_from_the_database_raw.csv` next to the
-   scripts and run step 1 (with the virtual environment active):
+   This fills `signatures_pdf/` with a PDF of each one. It says which
+   program it is using, skips anything already converted, and is safe to
+   re-run. About 5 minutes with LibreOffice, or around 40 with Word,
+   which is slower to start up.
 
-       python split_signatures_into_folders.py
-
-   This creates `signatures_docx/` and fills it with one `.docx`
-   per 1000 signatures. On average it takes 13 minutes for the 110 files.
-
-5. Run step 2:
-
-       python convert_docx_to_pdf.py
-
-   This creates `signatures_pdf/` and fills it with one `.pdf` per
-   `.docx` from step 1. Already-converted files are skipped, so it's
-   safe to re-run after adding more signatures. Timing depends on the
-   conversion backend: on Linux (LibreOffice) it takes roughly 5
-   minutes for the ~110 files (about 2–3 seconds each); on
-   Windows/macOS (Microsoft Word) it is slower, on the order of 40
-   minutes, because Word has a much higher start-up cost per document.
-
-
-
+> **On Linux?** Step 3 will refuse with
+> `error: externally-managed-environment`. Linux keeps its own Python
+> separate, so install into a folder of your own instead — run these
+> three lines in place of step 3, and the `source` line again in each
+> new terminal:
+>
+> ```
+> python3 -m venv .venv
+> source .venv/bin/activate
+> pip install -r requirements.txt
+> ```
 
 ---
 
@@ -259,8 +240,7 @@ helpers (CSV reading, column-width scaling, document construction,
 file discovery). The tests don't require Microsoft Word or LibreOffice
 to be installed — the conversion call itself is not unit-tested.
 
-To run them (with the virtual environment from
-[Quick start](#quick-start) active):
+To run them:
 
 ```
 pip install -r tests/test_requirements.txt
@@ -308,9 +288,8 @@ tests/test_split_signatures.py ...........                       [100%]
   open Word windows before running.
 - **`error: externally-managed-environment`** (Linux) — your
   distribution blocks installing packages into the system Python. Use
-  the virtual environment shown in [Quick start](#quick-start)
-  (`python3 -m venv .venv && source .venv/bin/activate`) and run `pip`
-  inside it.
+  the three lines in the **On Linux?** note at the end of
+  [Quick start](#quick-start) instead.
 - **`pip` is not recognised** — Python wasn't added to PATH. Re-install
   Python and tick *"Add Python to PATH"*, or use `py -m pip …`
   instead.
