@@ -1,8 +1,8 @@
 """Tests for generate_initials_book.py.
 
 They follow the three steps of the script: reading the CSV, turning names
-into initials, and laying the initials out on A4 — plus the rules that say
-when a layout cannot be printed.
+into initials, and laying the initials out on the page — plus the rules
+that say when a layout cannot be printed.
 """
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ from generate_initials_book import (
     read_two_column_csv,
 )
 
-# The defaults on A4: 1.5 cm offsets leave 18.0 × 26.7 cm. At 10 pt and
-# line spacing 1.2 a line is 12 pt high, so 63 lines fit, 7 to a line.
+# The defaults on A5: 1.5 cm offsets leave 11.8 × 18.0 cm. At 10 pt and
+# line spacing 1.2 a line is 12 pt high, so 42 lines fit, 7 to a line.
 DEFAULT = Layout()
-LINES_PER_PAGE = 63
-INITIALS_PER_PAGE = 441
+LINES_PER_PAGE = 42
+INITIALS_PER_PAGE = 294
 
 
 def layout(**changes) -> Layout:
@@ -85,14 +85,28 @@ class TestNamesToInitials:
 # ---------------------------------------------------------------------------
 
 class TestLayoutMaths:
-    def test_the_defaults_fill_an_a4_page(self):
+    def test_the_defaults_are_an_a5_book_page(self):
+        assert (DEFAULT.page_width_cm, DEFAULT.page_height_cm) == (14.8, 21.0)
+        assert DEFAULT.page_name == "A5"
         assert DEFAULT.columns == 7
         assert DEFAULT.lines_per_page == LINES_PER_PAGE
         assert DEFAULT.initials_per_page == INITIALS_PER_PAGE
 
     def test_the_text_area_is_the_page_minus_the_offsets(self):
-        assert DEFAULT.text_width_cm == pytest.approx(18.0)
-        assert DEFAULT.text_height_cm == pytest.approx(26.7)
+        assert DEFAULT.text_width_cm == pytest.approx(11.8)
+        assert DEFAULT.text_height_cm == pytest.approx(18.0)
+
+    def test_the_page_size_can_be_changed(self):
+        a4 = layout(page_width_cm=21.0, page_height_cm=29.7, column_gap_cm=1.5)
+        a4.validate()
+        assert a4.page_name == "A4"
+        assert a4.lines_per_page == 63
+        assert a4.pages_for(110_942) == 252
+
+    def test_an_unusual_page_size_is_named_by_its_measurements(self):
+        assert layout(page_width_cm=13.0, page_height_cm=20.0).page_name == (
+            "13 x 20 cm"
+        )
 
     def test_a_line_is_the_font_size_times_the_line_spacing(self):
         assert layout(font_size_pt=10, line_spacing=1.2).line_height_pt == 12.0
@@ -106,10 +120,10 @@ class TestLayoutMaths:
     def test_the_page_count_is_rounded_up(self):
         assert DEFAULT.pages_for(INITIALS_PER_PAGE) == 1
         assert DEFAULT.pages_for(INITIALS_PER_PAGE + 1) == 2
-        assert DEFAULT.pages_for(110_942) == 252
+        assert DEFAULT.pages_for(110_942) == 378
 
     def test_more_columns_means_fewer_pages(self):
-        assert layout(columns=10, column_gap_cm=1.0).pages_for(10_000) < (
+        assert layout(columns=7).pages_for(10_000) < (
             layout(columns=4).pages_for(10_000)
         )
 
@@ -124,7 +138,7 @@ class TestLayoutMaths:
         )
 
     def test_bigger_offsets_mean_more_pages(self):
-        assert layout(margin_cm=4.0, columns=5).pages_for(10_000) > (
+        assert layout(margin_cm=3.0, columns=3).pages_for(10_000) > (
             DEFAULT.pages_for(10_000)
         )
 
@@ -145,8 +159,9 @@ class TestLayoutMaths:
 
     def test_the_summary_mentions_the_columns_and_the_pages(self):
         summary = DEFAULT.describe(1000)
+        assert "A5" in summary
         assert "7 column(s)" in summary
-        assert "3 page(s)" in summary
+        assert "4 page(s)" in summary
 
 
 # ---------------------------------------------------------------------------
@@ -157,13 +172,14 @@ class TestLayoutValidation:
     def test_the_defaults_are_valid(self):
         DEFAULT.validate()  # must not raise
 
-    def test_too_many_columns_for_a4_is_rejected(self):
+    def test_too_many_columns_for_the_page_is_rejected(self):
         with pytest.raises(LayoutError) as error:
             layout(columns=20).validate()
-        assert "Use at most 8 column(s)" in str(error.value)
+        assert "Use at most 7 column(s)" in str(error.value)
+        assert "on A5" in str(error.value)
 
     def test_the_suggested_number_of_columns_really_fits(self):
-        layout(columns=8).validate()  # must not raise
+        layout(columns=7).validate()  # must not raise
 
     def test_too_big_a_font_for_the_columns_is_rejected(self):
         with pytest.raises(LayoutError) as error:
@@ -182,7 +198,7 @@ class TestLayoutValidation:
     def test_lines_too_tall_for_the_page_are_rejected(self):
         with pytest.raises(LayoutError) as error:
             layout(line_spacing=100).validate()
-        assert "only 26.7 cm are left" in str(error.value)
+        assert "only 18.0 cm are left" in str(error.value)
 
     @pytest.mark.parametrize(
         "impossible", [{"columns": 0}, {"columns": -1}, {"font_size_pt": 0},
@@ -224,11 +240,11 @@ class TestBuildInitialsDocument:
     def test_empty_input_produces_an_empty_document(self):
         assert build_initials_document([], DEFAULT).paragraphs == []
 
-    def test_the_page_is_a4_with_the_chosen_offsets(self):
+    def test_the_page_matches_the_layout(self):
         doc = build_initials_document(["И. И."], layout(margin_cm=2.0))
         section = doc.sections[0]
-        assert section.page_width.cm == pytest.approx(21.0, abs=0.01)
-        assert section.page_height.cm == pytest.approx(29.7, abs=0.01)
+        assert section.page_width.cm == pytest.approx(14.8, abs=0.01)
+        assert section.page_height.cm == pytest.approx(21.0, abs=0.01)
         assert section.left_margin.cm == pytest.approx(2.0, abs=0.01)
         assert section.top_margin.cm == pytest.approx(2.0, abs=0.01)
 
@@ -250,12 +266,12 @@ class TestBuildInitialsDocument:
         )
 
     def test_a_page_break_starts_every_page_after_the_first(self):
-        initials = [f"{i}." for i in range(1000)]  # 441 per page, so 3 pages
-        assert DEFAULT.pages_for(len(initials)) == 3
+        initials = [f"{i}." for i in range(1000)]  # 294 per page, so 4 pages
+        assert DEFAULT.pages_for(len(initials)) == 4
         doc = build_initials_document(initials, DEFAULT)
         breaks = [i for i, p in enumerate(doc.paragraphs)
                   if p.paragraph_format.page_break_before]
-        assert breaks == [LINES_PER_PAGE, 2 * LINES_PER_PAGE]
+        assert breaks == [LINES_PER_PAGE, 2 * LINES_PER_PAGE, 3 * LINES_PER_PAGE]
 
 
 # ---------------------------------------------------------------------------
@@ -293,4 +309,4 @@ class TestMain:
                      "--columns", "20"])
         assert code == 1
         assert not (names_csv / "out.docx").exists()
-        assert "Use at most 8 column(s)" in capsys.readouterr().out
+        assert "Use at most 7 column(s)" in capsys.readouterr().out

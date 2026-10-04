@@ -22,12 +22,12 @@ Linux.
 
 ### 📖 [`Book_Initials_Signatures/`](Book_Initials_Signatures/)
 
-Turns a CSV of signatory names into a printable A4 document listing just
+Turns a CSV of signatory names into a printable A5 book listing just
 their initials (e.g. `И. И.`), in the Bebas Neue Cyrillic font, several
-per line. The number of columns, the page offsets, the distance between
-the initials, the line spacing and the font size are all parameters with
-sensible defaults; the script reports how many pages the book will have
-before building it, and rejects settings that cannot fit on A4.
+per line. The page size, the number of columns, the page offsets, the
+distance between the initials, the line spacing and the font size are all
+parameters with sensible defaults; the script reports how many pages the
+book will have before building it, and rejects settings that cannot fit.
 
 See [`Book_Initials_Signatures/README.md`](Book_Initials_Signatures/README.md)
 for setup and usage.

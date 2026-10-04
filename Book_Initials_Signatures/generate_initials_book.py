@@ -5,12 +5,12 @@ The workflow is three steps:
 
     1. read the CSV of names          -> read_two_column_csv()
     2. turn the names into initials    -> names_to_initials()
-    3. lay the initials out on A4      -> Layout + build_initials_document()
+    3. lay the initials out on the page -> Layout + build_initials_document()
 
 A Layout is the five numbers that decide how the book looks: columns per
 line, font size, offset from the page edges, distance between the initials
 and line spacing. It works out how many pages the book will have, and
-refuses — with an explanation — anything that cannot be printed on A4.
+refuses — with an explanation — anything that cannot be printed on it.
 
 Usage:
     python generate_initials_book.py
@@ -50,16 +50,22 @@ FONT_SIZE_PT = 10.0
 
 COLUMNS = 7           # sets of initials next to each other on one line
 MARGIN_CM = 1.5       # offset from all four page edges
-COLUMN_GAP_CM = 1.5   # distance between the initials on a line
+COLUMN_GAP_CM = 1.0   # distance between the initials on a line
 LINE_SPACING = 1.2    # line height as a multiple of the font size
+
+# Page size. The default is A5 — half an A4 sheet, and the usual format for
+# a book, so two pages print on one sheet with nothing wasted. Other common
+# Bulgarian book formats: 14.5 × 20.0, 13.0 × 20.0, 17.0 × 24.0 cm.
+# A4 is 21.0 × 29.7.
+PAGE_WIDTH_CM = 14.8
+PAGE_HEIGHT_CM = 21.0
 
 # --- Fixed facts the layout is calculated from -----------------------------
 
-# A4 portrait, the paper this book is printed on.
-PAGE_WIDTH_CM = 21.0
-PAGE_HEIGHT_CM = 29.7
-
 POINTS_PER_CM = 72 / 2.54  # 1 cm = 28.35 pt
+
+# Standard sizes, only so that messages can name the page the reader chose
+NAMED_PAGE_SIZES = {"A4": (21.0, 29.7), "A5": (14.8, 21.0)}
 
 # A set of initials is at most "И. И." — five characters. In Bebas Neue
 # Cyrillic one character is about 0.42 of the font size wide, so one set is
@@ -72,7 +78,7 @@ CSV_SEPARATORS = [",", ";", "\t", "|"]
 
 
 class LayoutError(ValueError):
-    """Raised when a layout cannot be printed on an A4 page."""
+    """Raised when a layout cannot be printed on the chosen page size."""
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +91,7 @@ class Layout:
 
     Everything else — how wide a set of initials is, how many lines fit on
     a page, how many pages the book takes — follows from these and from the
-    size of an A4 sheet, and is a property below. Call :meth:`validate`
+    size of the page, and is a property below. Call :meth:`validate`
     first: it is what guarantees the numbers can actually be printed.
     """
 
@@ -94,18 +100,38 @@ class Layout:
     margin_cm: float = MARGIN_CM
     column_gap_cm: float = COLUMN_GAP_CM
     line_spacing: float = LINE_SPACING
+    page_width_cm: float = PAGE_WIDTH_CM
+    page_height_cm: float = PAGE_HEIGHT_CM
+
+    @property
+    def page_name(self) -> str:
+        """The page size as a reader would name it: 'A5', '13 x 20 cm'."""
+        for name, (width, height) in NAMED_PAGE_SIZES.items():
+            if (abs(self.page_width_cm - width) < 0.05
+                    and abs(self.page_height_cm - height) < 0.05):
+                return name
+        return f"{self.page_width_cm:g} x {self.page_height_cm:g} cm"
+
+    @property
+    def page_description(self) -> str:
+        """The page named with its size, for error messages."""
+        size = f"{self.page_width_cm:g} x {self.page_height_cm:g} cm"
+        if self.page_name == size:
+            return f"{size} page"
+        return f"{self.page_name} page ({size})"
+
 
     # -- the space the initials have to fit into ----------------------------
 
     @property
     def text_width_cm(self) -> float:
         """The page width minus the left and right offsets."""
-        return PAGE_WIDTH_CM - 2 * self.margin_cm
+        return self.page_width_cm - 2 * self.margin_cm
 
     @property
     def text_height_cm(self) -> float:
         """The page height minus the top and bottom offsets."""
-        return PAGE_HEIGHT_CM - 2 * self.margin_cm
+        return self.page_height_cm - 2 * self.margin_cm
 
     # -- one set of initials, one line, one page ----------------------------
 
@@ -154,7 +180,8 @@ class Layout:
     def describe(self, total_initials: int) -> str:
         """A short summary, printed before the document is built."""
         return (
-            f"Layout: A4, {self.columns} column(s) x {self.lines_per_page} "
+            f"Layout: {self.page_name}, {self.columns} column(s) x "
+            f"{self.lines_per_page} "
             f"line(s) = {self.initials_per_page:,} initials per page\n"
             f"        {self.font_size_pt:g} pt font, {self.margin_cm:g} cm "
             f"offsets, {self.column_gap_cm:g} cm between the initials, "
@@ -166,7 +193,7 @@ class Layout:
     # -- the rules ----------------------------------------------------------
 
     def validate(self) -> None:
-        """Check that this layout can be printed on A4.
+        """Check that this layout can be printed on the chosen page.
 
         Raises:
             LayoutError: saying what does not fit and what to change.
@@ -194,8 +221,8 @@ class Layout:
         if self.text_width_cm <= 0 or self.text_height_cm <= 0:
             raise LayoutError(
                 f"An offset of {self.margin_cm:g} cm on every side leaves no "
-                f"room on an A4 page ({PAGE_WIDTH_CM:g} x {PAGE_HEIGHT_CM:g} "
-                f"cm). Use less than {PAGE_WIDTH_CM / 2:g} cm."
+                f"room on the {self.page_description}. Use less than "
+                f"{min(self.page_width_cm, self.page_height_cm) / 2:g} cm."
             )
 
     def _check_columns_fit_the_width(self) -> None:
@@ -216,7 +243,8 @@ class Layout:
             f"{self.columns} column(s) of {self.font_size_pt:g} pt initials "
             f"with {self.column_gap_cm:g} cm between them need "
             f"{self.width_needed_cm:.1f} cm, but only {self.text_width_cm:.1f} "
-            f"cm are left between the {self.margin_cm:g} cm offsets on A4.\n"
+            f"cm are left between the {self.margin_cm:g} cm offsets on "
+            f"{self.page_name}.\n"
             f"{hint}"
         )
 
@@ -228,7 +256,7 @@ class Layout:
             f"A line of {self.font_size_pt:g} pt text at line spacing "
             f"{self.line_spacing:g} is {self.line_height_pt / POINTS_PER_CM:.1f}"
             f" cm high, but only {self.text_height_cm:.1f} cm are left between "
-            f"the {self.margin_cm:g} cm offsets on A4.\n"
+            f"the {self.margin_cm:g} cm offsets on {self.page_name}.\n"
             f"Use a smaller font size, a smaller line spacing, or smaller "
             f"offsets."
         )
@@ -283,7 +311,7 @@ def names_to_initials(names: pd.DataFrame) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Step 3 — from a list of initials to an A4 document
+# Step 3 — from a list of initials to a finished document
 # ---------------------------------------------------------------------------
 
 def group_into_lines(initials: list[str], columns: int) -> list[list[str]]:
@@ -294,14 +322,14 @@ def group_into_lines(initials: list[str], columns: int) -> list[list[str]]:
 def apply_page_style(
     doc: DocumentType, layout: Layout, font_name: str = FONT_NAME
 ) -> None:
-    """Set up the A4 page, the font and the column positions.
+    """Set up the page, the font and the column positions.
 
     The line height is exact and every column gets a tab stop, so a line
     always lands where the layout counted on.
     """
     section = doc.sections[0]
-    section.page_width = Cm(PAGE_WIDTH_CM)
-    section.page_height = Cm(PAGE_HEIGHT_CM)
+    section.page_width = Cm(layout.page_width_cm)
+    section.page_height = Cm(layout.page_height_cm)
     section.left_margin = section.right_margin = Cm(layout.margin_cm)
     section.top_margin = section.bottom_margin = Cm(layout.margin_cm)
 
@@ -323,7 +351,7 @@ def apply_page_style(
 def build_initials_document(
     initials: list[str], layout: Layout, font_name: str = FONT_NAME
 ) -> DocumentType:
-    """Build the A4 document: one paragraph per line, columns split by tabs.
+    """Build the document: one paragraph per line, columns split by tabs.
 
     Assumes ``layout`` has been validated.
     """
@@ -347,7 +375,7 @@ def build_initials_document(
 def build_arg_parser() -> argparse.ArgumentParser:
     """The command line: one option per configuration value."""
     parser = argparse.ArgumentParser(
-        description="Generate an A4 book of initials from a CSV of names.",
+        description="Generate a book of initials from a CSV of names.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--input", default=INPUT_CSV, help="CSV file to read")
@@ -363,6 +391,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         help="Distance between the initials on a line, in cm")
     parser.add_argument("--line-spacing", type=float, default=LINE_SPACING,
                         help="Line height as a multiple of the font size")
+    parser.add_argument("--page-width", type=float, default=PAGE_WIDTH_CM,
+                        help="Page width in cm (A5 is 14.8, A4 is 21.0)")
+    parser.add_argument("--page-height", type=float, default=PAGE_HEIGHT_CM,
+                        help="Page height in cm (A5 is 21.0, A4 is 29.7)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Only report the layout and the page count")
     return parser
@@ -376,6 +408,8 @@ def layout_from_args(args: argparse.Namespace) -> Layout:
         margin_cm=args.margin,
         column_gap_cm=args.column_gap,
         line_spacing=args.line_spacing,
+        page_width_cm=args.page_width,
+        page_height_cm=args.page_height,
     )
 
 

@@ -1,14 +1,15 @@
 # Book of Initials
 
 A single Python script that turns a CSV of signatory names into a
-printable A4 document listing just their initials (e.g. `И. И.`), in the
+printable A5 book listing just their initials (e.g. `И. И.`), in the
 **Bebas Neue Cyrillic** font, laid out in several columns per line.
 
-The layout is yours to choose: how many sets of initials go on one line
-(**7** by default), the font size, the offset from the page edges, the
-distance between the initials on a line and the line spacing. The script
-reports **how many pages the book will have** before it builds anything,
-and refuses — with an explanation — any combination that cannot fit on A4.
+The layout is yours to choose: the page size (**A5** by default — half an
+A4 sheet, the usual book format), how many sets of initials go on one line
+(**7**), the font size, the offset from the page edges, the distance
+between the initials on a line and the line spacing. The script reports
+**how many pages the book will have** before it builds anything, and
+refuses — with an explanation — any combination that cannot fit.
 
 This workflow is independent of the paper-submission one — you only
 need what's listed below.
@@ -71,8 +72,8 @@ ask. The AI can explain how each part works or help you adapt it.
    python generate_initials_book.py
    ```
 
-   With the default 7 columns a list of ~111,000 names takes about
-   15 seconds and produces a 252-page book.
+   With the defaults a list of ~111,000 names takes about 15 seconds and
+   produces a 378-page A5 book.
 
    To see the layout and the page count *without* writing anything:
 
@@ -149,23 +150,23 @@ Headers are *not* expected — the script reads from the very first row.
 
 ## What the output looks like
 
-An A4 document with 7 sets of initials per line:
+An A5 book with 7 sets of initials per line:
 
 ```
 И. И.    П. П.    М. М.    Г. Г.    А. А.    Н. Н.    С. С.
 Д. Д.    В. В.    Р. Р.    К. К.    Т. Т.    Б. Б.    Ж. Ж.
 ```
 
-Font: **Bebas Neue Cyrillic** at 10 pt, 1.5 cm offsets on all sides. That
-leaves an 18.0 × 26.7 cm text area, which holds 63 lines, so one page
-carries 7 × 63 = **441 sets of initials**.
+Font: **Bebas Neue Cyrillic** at 10 pt, 1.5 cm offsets on all sides. On
+A5 that leaves an 11.8 × 18.0 cm text area, which holds 42 lines, so one
+page carries 7 × 42 = **294 sets of initials**.
 
 Before building, the script prints the plan:
 
 ```
-Layout: A4, 7 column(s) x 63 line(s) = 441 initials per page
-        10 pt font, 1.5 cm offsets, 1.5 cm between the initials, line spacing 1.2
-        110,942 initials -> 252 page(s)
+Layout: A5, 7 column(s) x 42 line(s) = 294 initials per page
+        10 pt font, 1.5 cm offsets, 1 cm between the initials, line spacing 1.2
+        110,942 initials -> 378 page(s)
 ```
 
 ---
@@ -186,45 +187,55 @@ Every setting can be changed in two ways — whichever you find easier:
 | `--columns` | `COLUMNS` | `7` | Sets of initials next to each other on one line |
 | `--font-size` | `FONT_SIZE_PT` | `10` | Font size in points. Also decides how many lines fit on a page |
 | `--margin` | `MARGIN_CM` | `1.5` | Offset from all four page edges, in cm |
-| `--column-gap` | `COLUMN_GAP_CM` | `1.5` | Distance between the initials on a line, in cm |
+| `--column-gap` | `COLUMN_GAP_CM` | `1.0` | Distance between the initials on a line, in cm |
 | `--line-spacing` | `LINE_SPACING` | `1.2` | Height of a line, as a multiple of the font size |
+| `--page-width` | `PAGE_WIDTH_CM` | `14.8` | Page width in cm (A5 is 14.8, A4 is 21.0) |
+| `--page-height` | `PAGE_HEIGHT_CM` | `21.0` | Page height in cm (A5 is 21.0, A4 is 29.7) |
 | `--font-name` | `FONT_NAME` | `Bebas Neue Cyrillic` | Font family, exactly as your system reports it |
 | `--input`, `--output` | `INPUT_CSV`, `OUTPUT_DOCX` | see the script | The files to read and write |
 | `--dry-run` | — | off | Print the layout and the page count, write nothing |
 
-The page is always A4 (21 × 29.7 cm) — that is what the book is printed
-on, so it is fixed rather than a parameter. The columns are centred
-between the offsets, so whatever width they don't use is split evenly on
-both sides.
+The default page is **A5** (14.8 × 21.0 cm). A4 is a document format, not
+a book format; A5 is half an A4 sheet, so two book pages print on one
+sheet with nothing wasted. Other common Bulgarian book formats, should
+your printer prefer one of them:
+
+```
+python generate_initials_book.py --page-width 14.5 --page-height 20    # 60x84/16
+python generate_initials_book.py --page-width 13   --page-height 20    # 84x108/32
+python generate_initials_book.py --page-width 17   --page-height 24    # 70x100/16
+```
+
+The columns are centred between the offsets, so whatever width they don't
+use is split evenly on both sides.
 
 ### How the page count is worked out
 
-1. The text area is the page minus the offsets — 18.0 × 26.7 cm by
-   default.
-2. One line is `font size × line spacing` high: 10 × 1.2 = 12 pt. 26.7 cm
-   is 756.9 pt, so **63 lines** fit.
+1. The text area is the page minus the offsets — 11.8 × 18.0 cm on A5
+   with the default offsets.
+2. One line is `font size × line spacing` high: 10 × 1.2 = 12 pt. 18.0 cm
+   is 510.2 pt, so **42 lines** fit.
 3. One line holds `--columns` sets of initials, so a page holds
-   7 × 63 = **441**, and the page count is the number of initials divided
+   7 × 42 = **294**, and the page count is the number of initials divided
    by that, rounded up.
 
 So **a bigger font gives more pages** and **more columns give fewer
 pages**. For the ~111,000 names in the sample CSV:
 
-| Settings | Initials per page | Pages |
-| --- | --- | --- |
-| defaults (7 columns, 10 pt) | 441 | 252 |
-| `--columns 10 --column-gap 1.0` | 630 | 177 |
-| `--columns 5 --font-size 14` | 225 | 494 |
-| `--columns 1` (one per line) | 63 | 1,761 |
+| Settings | Page | Initials per page | Pages |
+| --- | --- | --- | --- |
+| defaults (A5, 7 columns, 10 pt) | A5 | 294 | 378 |
+| `--columns 5 --font-size 12` | A5 | 175 | 634 |
+| `--page-width 21 --page-height 29.7` | A4 | 441 | 252 |
+| `--columns 1` (one per line) | A5 | 42 | 2,642 |
 
 ### When the settings don't fit
 
 Nothing is written and the script says what is wrong and what to change:
 
 ```
-ERROR: 20 column(s) of 10 pt initials with 1.5 cm between them need 43.3 cm,
-but only 18.0 cm are left between the 1.5 cm offsets on A4.
-Use at most 8 column(s), a smaller gap, a smaller font size, or smaller offsets.
+ERROR: 20 column(s) of 10 pt initials with 1 cm between them need 33.8 cm, but only 11.8 cm are left between the 1.5 cm offsets on A5.
+Use at most 7 column(s), a smaller gap, a smaller font size, or smaller offsets.
 ```
 
 The same happens when the offsets leave no room on the page, or when the
@@ -241,7 +252,7 @@ class:
 | --- | --- |
 | `read_two_column_csv()` | reads the CSV, trying the usual separators |
 | `names_to_initials()` | `Иван, Иванов` → `И. И.`, in one vectorised pandas pass |
-| `Layout` | the five numbers above. Every other figure — the width of one set of initials, the lines per page, the page count — is a property derived from them and from the size of an A4 sheet |
+| `Layout` | the five numbers above. Every other figure — the width of one set of initials, the lines per page, the page count — is a property derived from them and from the page size |
 | `Layout.validate()` | the three rules: the values make sense, the columns fit across the page, a line fits down it. Raises `LayoutError` with the message you saw above |
 | `build_initials_document()` | one paragraph per line, the columns separated by tabs, a page break where the layout says a page ends |
 | `main()` | reads, validates, prints the plan, writes the document |
@@ -267,11 +278,11 @@ A successful run looks like:
 
 ```
 ======================== test session starts ========================
-collected 50 items
+collected 52 items
 
 tests/test_generate_initials_book.py ....................    [100%]
 
-======================== 50 passed in 0.8s ==========================
+======================== 52 passed in 0.8s ==========================
 ```
 
 `tests/benchmark_initials_book.py` compares the build time and the page
@@ -284,10 +295,10 @@ python tests/benchmark_initials_book.py --limit 20000
 
 ```
  columns     lines   pages     time
-       1    20,000     318    10.1s
-       3     6,667     106     1.6s
-       5     4,000      64     1.1s
-       7     2,858      46     0.9s
+       1    20,000     477    11.8s
+       3     6,667     159     1.9s
+       5     4,000      96     1.2s
+       7     2,858      69     0.9s
 ```
 
 ---
@@ -306,7 +317,7 @@ python tests/benchmark_initials_book.py --limit 20000
   close Word completely before re-running so it picks up the newly
   installed font.
 - **`… need 43.3 cm, but only 18.0 cm are left`** — the columns, the
-  gap and the font size together need more width than A4 has. The
+  gap and the font size together need more width than the page has. The
   message says how many columns do fit; use that number, or a smaller
   `--column-gap`, `--font-size` or `--margin`.
 - **`A line of … is 35.3 cm high`** — the font size times the line
