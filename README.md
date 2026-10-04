@@ -4,10 +4,12 @@ Two independent Python toolkits built to help a Bulgarian animal-welfare
 NGO (*Сдружение „Невидими животни"*) process the signatures collected
 for its petitions and turn them into print-ready documents.
 
-Both toolkits read the same kind of input — an exported list of
-signatories — but produce different outputs for different purposes.
-Each lives in its own folder with its own detailed README, dependencies,
-and test suite, and can be used completely independently of the other.
+Both toolkits read an exported list of signatories, but the
+paper-submission toolkit uses the full record for each signatory
+(names, email, date, etc.), while the book-of-initials toolkit needs
+only the names. Each toolkit lives in its own folder with its own
+detailed README, dependencies, and test suite, and can be used
+completely independently of the other.
 
 The code is written to be readable and maintainable: small, documented
 functions, configuration grouped at the top of each script, and a
