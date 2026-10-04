@@ -16,9 +16,9 @@ startup overhead is the dominant cost, and that's what batch mode
 amortises.
 
 Usage:
-    python benchmark_conversion.py
-    python benchmark_conversion.py --input-folder some_other_folder
-    python benchmark_conversion.py --limit 10
+    python tests/benchmark_conversion.py
+    python tests/benchmark_conversion.py --input-folder some_other_folder
+    python tests/benchmark_conversion.py --limit 10
 """
 
 from __future__ import annotations
@@ -30,8 +30,10 @@ import sys
 import tempfile
 import time
 
-from convert_docx_to_pdf import INPUT_FOLDER as DEFAULT_INPUT_FOLDER
-from convert_docx_to_pdf import get_converter
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from convert_docx_to_pdf import INPUT_FOLDER as DEFAULT_INPUT_FOLDER  # noqa: E402
+from convert_docx_to_pdf import get_converter  # noqa: E402
 
 
 def time_per_file_conversion(docx_dir: str, pdf_dir: str) -> float:

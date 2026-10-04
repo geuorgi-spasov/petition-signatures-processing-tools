@@ -20,24 +20,28 @@ Linux.
 
 ## The two toolkits
 
-### 📖 [`book_of_initials/`](book_of_initials/)
+### 📖 [`Book_Initials_Signatures/`](Book_Initials_Signatures/)
 
-Turns a CSV of signatory names into a printable A5 Word document listing
-just their initials (e.g. `И. И.`), in the Bebas Neue Cyrillic font.
+Turns a CSV of signatory names into a printable A4 document listing just
+their initials (e.g. `И. И.`), in the Bebas Neue Cyrillic font, several
+per line. The number of columns, the page offsets, the distance between
+the initials, the line spacing and the font size are all parameters with
+sensible defaults; the script reports how many pages the book will have
+before building it, and rejects settings that cannot fit on A4.
 
-See [`book_of_initials/README.md`](book_of_initials/README.md) for setup
-and usage.
+See [`Book_Initials_Signatures/README.md`](Book_Initials_Signatures/README.md)
+for setup and usage.
 
-### 📄 [`paper_submission/`](paper_submission/)
+### 📄 [`Paper_Submission_Signatures/`](Paper_Submission_Signatures/)
 
 Turns a raw database export of signatures into paginated Word documents
-(1000 signatures each, 10 per landscape page, with continuous page
+(1000 signatures each, 10 per A4 landscape page, with continuous page
 numbering and a footer) and converts them to PDFs ready for paper
 submission. The PDF conversion runs on Microsoft Word (Windows/macOS) or
 LibreOffice (Linux), whichever is available.
 
-See [`paper_submission/README.md`](paper_submission/README.md) for setup
-and usage.
+See [`Paper_Submission_Signatures/README.md`](Paper_Submission_Signatures/README.md)
+for setup and usage.
 
 ---
 
