@@ -1,4 +1,4 @@
-# Невидими животни — Signature Processing Tools
+# NGO Petition Signature Processing Tools
 
 Two independent Python toolkits built to help a Bulgarian animal-welfare
 NGO (*Сдружение „Невидими животни"*) process the signatures collected
