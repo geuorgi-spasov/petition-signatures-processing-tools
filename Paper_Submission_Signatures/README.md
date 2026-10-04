@@ -38,85 +38,71 @@ The sample data is synthetic and anonymised and contains no real personal inform
 
 Follow **one** of the two paths below — whichever matches your computer.
 
-### Windows and macOS
+### Windows
 
-1. **Install Python** from <https://www.python.org/downloads/>.
-   On Windows, tick *"Add Python to PATH"* during the installation.
-
+1. **Install Python** from <https://www.python.org/downloads/>, ticking
+   *"Add Python to PATH"* during the installation.
 2. **Check you can make PDFs.** If you have Microsoft Word on this
    computer, there is nothing to do. If you don't, install
    [LibreOffice](https://www.libreoffice.org/download/) — it's free.
    (Word in a browser at office.com doesn't count; the script opens the
    Word program itself.)
+3. **Put your `Signatures_from_the_database_raw.csv` in this folder.**
+4. **Double-click `run.bat`.**
 
-3. **Install what the scripts need.** Open PowerShell (Windows) or
-   Terminal (macOS) in this folder and run:
+### Linux and macOS
 
-   ```
-   pip install -r requirements.txt
-   ```
-
-4. **Run the first script.** Put your
-   `Signatures_from_the_database_raw.csv` in this folder and run:
-
-   ```
-   python split_signatures_into_folders.py
-   ```
-
-5. **Run the second script.**
-
-   ```
-   python convert_docx_to_pdf.py
-   ```
-
-### Linux
-
-1. **Install Python.**
+1. **Install Python** — on Ubuntu/Mint/Debian:
 
    ```
    sudo apt install python3 python3-venv
    ```
 
-2. **Install LibreOffice**, which is what makes the PDFs.
+2. **Install LibreOffice**, which is what makes the PDFs:
 
    ```
    sudo apt install libreoffice
    ```
 
-3. **Install what the scripts need.** Open Terminal in this folder and
-   run these three lines. Linux keeps its own Python locked, so they
-   install into a `.venv` folder here instead of system-wide:
+3. **Put your `Signatures_from_the_database_raw.csv` in this folder.**
+4. **Open Terminal in this folder and run:**
 
    ```
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
+   ./run.sh
    ```
 
-   If you come back in a new terminal later, run the `source` line
-   again before step 4.
+### What happens then
 
-4. **Run the first script.** Put your
-   `Signatures_from_the_database_raw.csv` in this folder and run:
+`run.bat` and `run.sh` do the whole job. First they fill
+`signatures_docx/` with one Word file per 1000 signatures — about 13
+minutes for 111 files. Then they fill `signatures_pdf/` with a PDF of
+each one, printing which program they are using. That takes about 5
+minutes with LibreOffice, or around 40 with Word, which is much slower
+to start up.
 
-   ```
-   python split_signatures_into_folders.py
-   ```
+Both halves skip anything they have already done, so if it is
+interrupted you can start it again and it picks up where it left off.
 
-5. **Run the second script.**
+### Prefer to run the steps yourself?
 
-   ```
-   python convert_docx_to_pdf.py
-   ```
+The launchers do no magic. On Windows:
 
-### What the two scripts do
+```
+pip install -r requirements.txt
+python split_signatures_into_folders.py
+python convert_docx_to_pdf.py
+```
 
-The first fills `signatures_docx/` with one Word file per 1000
-signatures — about 13 minutes for 111 files. The second fills
-`signatures_pdf/` with a PDF of each one; it prints which program it is
-using, skips anything already converted, and is safe to re-run. That
-takes about 5 minutes with LibreOffice, or around 40 with Word, which is
-much slower to start up.
+On Linux, Python has to be installed into a folder of its own, so it is
+one line more:
+
+```
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+python split_signatures_into_folders.py
+python convert_docx_to_pdf.py
+```
+
+Run the `source .venv/bin/activate` part again in any new terminal.
 
 ---
 
@@ -321,7 +307,7 @@ tests/test_split_signatures.py ...........                       [100%]
   open Word windows before running.
 - **`error: externally-managed-environment`** (Linux) — your
   distribution blocks installing packages into the system Python. Use
-  the [Linux steps](#linux) in Quick start instead.
+  the [Linux steps](#linux-and-macos) in Quick start instead.
 - **`pip` is not recognised** — Python wasn't added to PATH. Re-install
   Python and tick *"Add Python to PATH"*, or use `py -m pip …`
   instead.
@@ -340,6 +326,8 @@ Paper_Submission_Signatures/
 ├── requirements.txt
 ├── split_signatures_into_folders.py
 ├── convert_docx_to_pdf.py
+├── run.bat                                 (Windows: double-click to start)
+├── run.sh                                  (Linux/macOS: ./run.sh)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_requirements.txt               (extras for running tests)
