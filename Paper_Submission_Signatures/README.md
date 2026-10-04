@@ -198,7 +198,9 @@ variables. Edit, save, and re-run.
 - `PAGE_WIDTH_CM`, `PAGE_HEIGHT_CM` and the four margin constants —
   page layout, in centimeters
 - `ROW_HEIGHT_CM` — height of each table row in centimeters
-- `BODY_FONT`, `FOOTER_FONT`, `BODY_FONT_SIZE_PT` — fonts
+- `BODY_FONT`, `BODY_FONT_SIZE_PT` — the table's font and size
+- `FOOTER_FONT`, `FOOTER_FONT_SIZE_PT` — the footer's own font and
+  size; lowering the size gives the table more height to work with
 - `DEFAULT_COLUMN_WIDTHS_CM` — preset column widths in centimeters,
   tuned for 6 columns and auto-scaled to fit the page
 - `ORGANIZATION_NAME` — text printed at the bottom of every page

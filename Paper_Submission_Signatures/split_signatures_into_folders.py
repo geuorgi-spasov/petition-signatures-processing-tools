@@ -55,8 +55,9 @@ BOTTOM_MARGIN_CM = 2.0
 # Row layout
 ROW_HEIGHT_CM = 1.3
 BODY_FONT = "Arial"
-FOOTER_FONT = "Cambria"
 BODY_FONT_SIZE_PT = 12
+FOOTER_FONT = "Cambria"
+FOOTER_FONT_SIZE_PT = 12   # lower this to give the table more height
 
 # Footer text (Bulgarian)
 ORGANIZATION_NAME = 'Сдружение „Невидими животни"'
@@ -255,13 +256,13 @@ def add_page_footer(
         f"Стр. {global_page_number}, папка {folder_number}"
     )
     info_run.font.name = FOOTER_FONT
-    info_run.font.size = Pt(BODY_FONT_SIZE_PT)
+    info_run.font.size = Pt(FOOTER_FONT_SIZE_PT)
     info_run.italic = True
     info_run.add_break()
 
     org_run = footer.add_run(ORGANIZATION_NAME)
     org_run.font.name = FOOTER_FONT
-    org_run.font.size = Pt(BODY_FONT_SIZE_PT)
+    org_run.font.size = Pt(FOOTER_FONT_SIZE_PT)
     org_run.italic = True
 
 
