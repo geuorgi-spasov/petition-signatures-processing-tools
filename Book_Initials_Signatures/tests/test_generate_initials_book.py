@@ -76,33 +76,36 @@ class TestNamesToInitials:
         names = pd.DataFrame([[None, None], ["", ""], ["Иван", "Иванов"]])
         assert names_to_initials(names) == ["И. И."]
 
-    # The export really does contain names like these - 60 rows of it.
-    # The initial is the first *letter*, whatever junk precedes it.
+    # The export really does contain names like these - 60 rows of it. The
+    # initial is the first character as recorded, whatever it happens to be:
+    # the book shows what the record says rather than guessing at a fix.
     @pytest.mark.parametrize(
         "name,initial",
         [
-            ("2milyanov", "M"),      # digit
-            ("0milyanov", "M"),
-            ("?milyanov", "M"),      # question mark
-            ("^milyanov", "M"),      # caret
-            ("'milyanov", "M"),      # quote
-            (".milyanov", "M"),      # dot
-            ("-milyanov", "M"),      # dash
-            ("…milyanov", "M"),      # ellipsis
-            ("#@!milyanov", "M"),    # several at once
-            ("  2milyanov  ", "M"),  # and with spaces around it
+            ("2milyanov", "2"),      # digit
+            ("0milyanov", "0"),
+            ("?milyanov", "?"),      # question mark
+            ("^milyanov", "^"),      # caret
+            ("'milyanov", "'"),      # quote
+            (".milyanov", "."),      # dot
+            ("-milyanov", "-"),      # dash
+            ("…milyanov", "…"),      # ellipsis
+            ("#@!milyanov", "#"),    # several at once: still just the first
+            ("  2milyanov  ", "2"),  # surrounding spaces are stripped first
+            ("2", "2"),              # a name that is only the odd character
+            (".", "."),
             ("Иван", "И"),           # the ordinary case still works
-            ("иван", "И"),
+            ("иван", "И"),           # and is still upper-cased
         ],
     )
-    def test_the_initial_is_the_first_letter_whatever_precedes_it(
+    def test_the_initial_is_the_first_character_whatever_it_is(
         self, name, initial
     ):
         names = pd.DataFrame([[name, "Иванов"]])
         assert names_to_initials(names) == [f"{initial}. И."]
 
-    @pytest.mark.parametrize("name", ["2", ".", "?", "^", "...", "123", "   "])
-    def test_a_name_with_no_letters_at_all_counts_as_missing(self, name):
+    @pytest.mark.parametrize("name", ["", "   ", "\t", None])
+    def test_only_an_empty_name_counts_as_missing(self, name):
         names = pd.DataFrame([[name, "Иванов"], [name, name]])
         assert names_to_initials(names) == ["И."]
 

@@ -292,11 +292,11 @@ A successful run looks like:
 
 ```
 ======================== test session starts ========================
-collected 72 items
+collected 71 items
 
 tests/test_generate_initials_book.py ....................    [100%]
 
-======================== 72 passed in 0.9s ==========================
+======================== 71 passed in 0.9s ==========================
 ```
 
 ### Checking the real PDF

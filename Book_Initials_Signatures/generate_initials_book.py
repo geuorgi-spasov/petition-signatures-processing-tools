@@ -76,10 +76,6 @@ CHARACTER_WIDTH_EM = 0.42
 # Separators tried when auto-detecting the CSV format
 CSV_SEPARATORS = [",", ";", "\t", "|"]
 
-# The first letter of a name — not the first character, which in real data
-# is sometimes a digit, a dot or a quote mark.
-FIRST_LETTER = r"([^\W\d_])"
-
 
 class LayoutError(ValueError):
     """Raised when a layout cannot be printed on the chosen page size."""
@@ -296,20 +292,20 @@ def read_two_column_csv(path: str) -> pd.DataFrame:
 def names_to_initials(names: pd.DataFrame) -> list[str]:
     """Turn each (first name, last name) row into initials like ``И. И.``.
 
-    Rows with no usable name are dropped; a row with only one name gives a
-    single initial. Uses vectorized pandas operations (~20× faster than
+    Rows with no name at all are dropped; a row with only one name gives a
+    single initial. The initial is the first character exactly as recorded,
+    including a digit or a punctuation mark. Uses vectorized pandas operations (~20× faster than
     row-by-row iteration on large datasets).
     """
     first_names = names.iloc[:, 0].fillna("").astype(str).str.strip()
     last_names = names.iloc[:, 1].fillna("").astype(str).str.strip()
 
-    # The first *letter*, so that a stray digit or punctuation mark at the
-    # start of a name (the data has a few: "2milyanov", "?milyanov", ".")
-    # does not become somebody's initial.
-    first_initial = first_names.str.extract(FIRST_LETTER, expand=False)
-    last_initial = last_names.str.extract(FIRST_LETTER, expand=False)
-    first_initial = first_initial.fillna("").str.upper()
-    last_initial = last_initial.fillna("").str.upper()
+    # The first character as it stands, whatever it is. The export holds a
+    # few names beginning with a digit or a mark ("2milyanov", "?milyanov"),
+    # and the book should show what the record says rather than guess at a
+    # correction. Only a name that is empty counts as no name.
+    first_initial = first_names.str[:1].str.upper()
+    last_initial = last_names.str[:1].str.upper()
     has_first = first_initial != ""
     has_last = last_initial != ""
 
