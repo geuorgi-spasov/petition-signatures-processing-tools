@@ -269,7 +269,7 @@ def add_page_table(
                 run.font.size = Pt(BODY_FONT_SIZE_PT)
 
     # Data rows: left-aligned, body font size
-    for row_idx, (_, data_row) in enumerate(page_rows.iterrows()):
+    for row_idx, data_row in enumerate(page_rows.itertuples(index=False)):
         table_row = table.rows[row_idx + 1]
         for col_idx, value in enumerate(data_row):
             if col_idx >= len(table_row.cells):
