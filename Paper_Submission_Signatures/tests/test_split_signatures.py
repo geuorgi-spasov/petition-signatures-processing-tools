@@ -86,7 +86,7 @@ class TestReadSignaturesCsv:
 # ---------------------------------------------------------------------------
 
 class TestBuildFolderDocument:
-    def _make_chunk(self, n_rows):
+    def _make_folder_rows(self, n_rows):
         return pd.DataFrame(
             {
                 "id": range(1, n_rows + 1),
@@ -99,31 +99,31 @@ class TestBuildFolderDocument:
         )
 
     def test_returns_document_and_correct_page_count(self):
-        chunk = self._make_chunk(25)  # 25 rows = 3 pages at 10 per page
-        header = chunk.columns.tolist()
+        folder_rows = self._make_folder_rows(25)  # 25 rows = 3 pages at 10 per page
+        header = folder_rows.columns.tolist()
         widths = scale_column_widths(len(header))
 
-        doc, pages = build_folder_document(1, chunk, header, widths)
+        doc, pages = build_folder_document(1, folder_rows, header, widths)
 
         assert pages == 3
         # One table per page
         assert len(doc.tables) == 3
 
     def test_single_page_for_small_chunk(self):
-        chunk = self._make_chunk(5)
-        header = chunk.columns.tolist()
+        folder_rows = self._make_folder_rows(5)
+        header = folder_rows.columns.tolist()
         widths = scale_column_widths(len(header))
 
-        doc, pages = build_folder_document(1, chunk, header, widths)
+        doc, pages = build_folder_document(1, folder_rows, header, widths)
         assert pages == 1
         assert len(doc.tables) == 1
 
     def test_full_folder_size(self):
-        chunk = self._make_chunk(1000)
-        header = chunk.columns.tolist()
+        folder_rows = self._make_folder_rows(1000)
+        header = folder_rows.columns.tolist()
         widths = scale_column_widths(len(header))
 
-        doc, pages = build_folder_document(1, chunk, header, widths)
+        doc, pages = build_folder_document(1, folder_rows, header, widths)
         assert pages == 100  # 1000 / 10
         assert len(doc.tables) == 100
 

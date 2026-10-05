@@ -315,21 +315,21 @@ def add_page_footer(
 
 def build_folder_document(
     folder_number: int,
-    chunk: pd.DataFrame,
+    folder_rows: pd.DataFrame,
     header: list[str],
     column_widths: list[float],
 ) -> tuple[DocumentType, int]:
     """Build the Word document for a single submission folder (~1000 rows)."""
     doc = create_landscape_document()
 
-    pages_in_file = (len(chunk) + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
+    pages_in_file = (len(folder_rows) + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
     # Pages in a *full* folder — used so page numbering continues across files
     pages_per_full_folder = (ROWS_PER_FILE + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
 
     for page_num in range(1, pages_in_file + 1):
         start = (page_num - 1) * ROWS_PER_PAGE
-        end = min(start + ROWS_PER_PAGE, len(chunk))
-        page_rows = chunk.iloc[start:end]
+        end = min(start + ROWS_PER_PAGE, len(folder_rows))
+        page_rows = folder_rows.iloc[start:end]
 
         add_page_table(doc, header, page_rows, column_widths)
 
@@ -375,13 +375,13 @@ def main() -> None:
     for folder_number in range(1, total_files + 1):
         start = (folder_number - 1) * ROWS_PER_FILE
         end = min(start + ROWS_PER_FILE, len(df))
-        chunk = df.iloc[start:end]
+        folder_rows = df.iloc[start:end]
 
-        first_id = str(chunk.iloc[0, 0])
-        last_id = str(chunk.iloc[-1, 0])
+        first_id = str(folder_rows.iloc[0, 0])
+        last_id = str(folder_rows.iloc[-1, 0])
 
         doc, pages = build_folder_document(
-            folder_number, chunk, header, column_widths
+            folder_number, folder_rows, header, column_widths
         )
         filename = (
             f"Папка {folder_number} с подписи от {first_id} до {last_id}.docx"
@@ -394,7 +394,7 @@ def main() -> None:
         remaining = avg_per_folder * (total_files - folder_number)
         print(
             f"  [{folder_number}/{total_files}] '{filename}' — "
-            f"{len(chunk)} signatures, {pages} pages"
+            f"{len(folder_rows)} signatures, {pages} pages"
             + (
                 f"  (~{_format_duration(remaining)} remaining)"
                 if folder_number < total_files
