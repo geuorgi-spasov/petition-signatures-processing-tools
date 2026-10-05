@@ -29,12 +29,15 @@ exit /b 0
 :no_files
 echo.
 echo This file cannot find the rest of the program.
-echo It looked in this folder:
-echo     %CD%
 echo.
-echo If you double-clicked it from inside the ZIP file, that is the cause.
-echo Close the ZIP, right-click it, choose "Extract All", and then run
-echo this file from the extracted folder instead.
+echo   This file is in:   %~dp0
+echo   Looking in:        %CD%
+echo.
+echo requirements.txt should sit next to this file. If the two folders
+echo above are different, tell Georgi - that is the problem.
+echo If they are the same, the folder is missing its other files: close
+echo the ZIP, right-click it, choose "Extract All", and run this file
+echo from the extracted folder.
 echo.
 pause >nul
 popd
