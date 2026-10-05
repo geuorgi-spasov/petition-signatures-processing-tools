@@ -56,6 +56,11 @@ DEFAULT_LIMIT = 20_000
 TOLERANCE = 0.10  # a tenth more pages than predicted is still acceptable
 
 
+def say(message: str) -> None:
+    """Print a progress line that appears immediately, not at the end."""
+    print(message, flush=True)
+
+
 def find_converter() -> tuple[str, str] | None:
     """Return ``(kind, path)`` for a program that can make PDFs, or None."""
     for name in ("libreoffice", "soffice"):
@@ -171,27 +176,44 @@ def main() -> int:
                         help="Font to set the book in")
     args = parser.parse_args()
 
+    # Every step below is slow enough to look like a hang, and the two
+    # slowest say nothing while they work. Keep the output unbuffered so
+    # each line appears when it happens rather than all at once at the
+    # end - which is what Python does by default when its output is not
+    # going straight to a console.
+    say("Looking for a program that can make a PDF...")
+
     converter = find_converter()
     if converter is None:
-        print("No program found that can make a PDF.")
-        print("Install LibreOffice (free) or, on Windows/macOS, Microsoft Word.")
+        say("No program found that can make a PDF.")
+        say("Install LibreOffice (free) or, on Windows/macOS, Microsoft Word.")
+        say("On Windows with Word already installed, the package that "
+            "drives it may be missing: pip install -r "
+            "tests/test_requirements.txt")
         return 1
     kind, path = converter
+    program = "LibreOffice" if kind == "libreoffice" else "Microsoft Word"
+    say(f"  found {program} ({path}).")
 
+    source = args.input if os.path.isfile(args.input) else "invented initials"
+    say(f"Reading {source}...")
     initials = load_initials(args.input, args.limit)
+    say(f"  {len(initials):,} initials.")
+
     layout = Layout(columns=args.columns, font_size_pt=args.font_size,
                     margin_cm=args.margin)
     layout.validate()
     lines = len(group_into_lines(initials, layout.columns))
 
-    print(f"Rendering {len(initials):,} initials with "
-          f"{'LibreOffice' if kind == 'libreoffice' else 'Microsoft Word'}...")
-
     with tempfile.TemporaryDirectory() as folder:
         docx = os.path.join(folder, "book.docx")
+        say(f"Building the document ({lines:,} lines)...")
         build_initials_document(initials, layout,
                                 font_name=args.font_name).save(docx)
+        say(f"Converting it to PDF with {program} — this is the slow part, "
+            f"and it prints nothing while it runs...")
         pdf = convert_to_pdf(kind, path, docx, folder)
+        say("  converted.")
         actual_pages = count_pdf_pages(pdf)
         embedded = fonts_in_pdf(pdf)
 
