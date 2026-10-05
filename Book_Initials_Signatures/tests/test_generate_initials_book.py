@@ -441,6 +441,11 @@ class TestEncodings:
 # ---------------------------------------------------------------------------
 
 class TestSeparators:
+    # The commas below are not a Bulgarian name form - a double first name
+    # is written "Иван-Петър" or "Иван Петър", never with a comma. They
+    # are here only as a field that happens to contain the character the
+    # detection would otherwise try first, which is what the order guards
+    # against.
     def test_a_comma_inside_a_field_does_not_beat_the_real_separator(
         self, tmp_path
     ):
@@ -455,12 +460,22 @@ class TestSeparators:
         assert names_to_initials(names) == ["И. И.", "М. М."]
 
     def test_a_comma_inside_a_semicolon_file_loses_too(self, tmp_path):
-        # Surname-first exports put a comma in the name itself.
         csv = tmp_path / "names.csv"
         csv.write_text("Иванов, Иван;Петров\nДимитров, Анна;Георгиев\n",
                        encoding="utf-8")
         names = read_two_column_csv(str(csv))
         assert names_to_initials(names) == ["И. П.", "Д. Г."]
+
+    @pytest.mark.parametrize("first_name", ["Иван-Петър", "Иван Петър"])
+    def test_a_real_double_first_name_is_left_alone(self, tmp_path, first_name):
+        # The two forms a double first name actually takes. Neither holds
+        # a separator, so neither can confuse the detection - and the
+        # initial is the first letter of the whole thing either way.
+        csv = tmp_path / "names.csv"
+        csv.write_text(f"{first_name}\tИванов\n", encoding="utf-8")
+        names = read_two_column_csv(str(csv))
+        assert (names.iloc[0, 0], names.iloc[0, 1]) == (first_name, "Иванов")
+        assert names_to_initials(names) == ["И. И."]
 
     def test_a_genuine_comma_file_still_works(self, tmp_path):
         # Ordering the comma last must not stop it being found when it

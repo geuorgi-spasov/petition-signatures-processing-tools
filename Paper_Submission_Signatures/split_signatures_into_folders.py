@@ -71,22 +71,14 @@ DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 
 # Separators and encodings tried when auto-detecting the CSV format.
 #
-# Separators are ordered least-likely-to-appear-inside-a-field first, and
-# that order is load-bearing for the same reason the encoding order is.
-# Unlike an encoding, a separator cannot fail: several can each split the
-# same file into more than one column, and the first one tried wins. The
-# column count cannot break that tie - both splits look equally valid -
-# so only the characters themselves can:
-#
-#   \t and |   never occur inside this export's fields, so a file that
-#              splits on one of them really is separated by it.
-#   ;          occurs in prose but almost never in a name or an address.
-#   ,          LAST, and it must stay last: it is the one separator that
-#              turns up inside the data itself. Today's export is clean -
-#              no field in it contains a comma - but a later one carrying
-#              a free-text column (an address, say: "гр. София, ул.
-#              Витоша 5") would break the moment the comma were tried
-#              first, shifting every field one column to the left.
+# Separators are ordered by how unlikely each is to turn up inside a
+# field. A separator cannot fail the way an encoding can: if a field
+# contains the character being tried, that split also yields more than
+# one column and wins, silently, and the column count cannot tell the
+# two apart. A tab or a pipe effectively never appears inside a field,
+# a semicolon rarely, and a comma most readily of the four - so the
+# comma goes last. This export contains none of them, so the order
+# guards a future file rather than fixing this one.
 #
 # The first encoding that decodes the file wins, so the order is what makes
 # this correct rather than merely successful. An encoding earns a place here

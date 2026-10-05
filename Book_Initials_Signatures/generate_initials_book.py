@@ -75,27 +75,14 @@ CHARACTER_WIDTH_EM = 0.42
 
 # Separators and encodings tried when auto-detecting the CSV format.
 #
-# Separators are ordered least-likely-to-appear-inside-a-name first, and
-# that order is load-bearing for the same reason the encoding order is.
-# Unlike an encoding, a separator cannot fail: several can each split the
-# same file into two columns, and the first one tried wins. Given the row
-#
-#     Иван, Петър<TAB>Иванов
-#
-# a comma yields ('Иван', ' Петър\tИванов') and a tab yields
-# ('Иван, Петър', 'Иванов') - both exactly two columns, so the column
-# count cannot break the tie. Only the characters themselves can:
-#
-#   \t and |   never occur inside a Bulgarian name, so a file that splits
-#              on one of them really is separated by it.
-#   ;          occurs in prose but almost never in a name.
-#   ,          LAST, and it must stay last: it is the one separator that
-#              turns up inside the data itself, in surname-first exports
-#              like "Иванов, Иван". Tried first, it silently wins on
-#              tab-separated files and yields the wrong initials.
-#
-# Quoting the field ("Иван, Петър"<TAB>Иванов) also resolves this, but a
-# CSV that needed quoting and did not get it is exactly the case here.
+# Separators are ordered by how unlikely each is to turn up inside a
+# field. A separator cannot fail the way an encoding can: if a field
+# contains the character being tried, that split also yields two columns
+# and wins, silently, and the column count cannot tell the two apart.
+# A tab or a pipe effectively never appears inside a field, a semicolon
+# rarely, and a comma most readily of the four - so the comma goes last.
+# This export contains none of them, so the order guards a future file
+# rather than fixing this one.
 #
 # The first encoding that decodes the file wins, so the order is what makes
 # this correct rather than merely successful. An encoding earns a place here
