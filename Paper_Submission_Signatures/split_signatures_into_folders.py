@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Iterator
 
 import pandas as pd
 from docx import Document
@@ -114,6 +115,18 @@ LAST_RESORT_ENCODING = "latin-1"
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
+
+def in_blocks_of(rows: pd.DataFrame, size: int) -> Iterator[pd.DataFrame]:
+    """Cut ``rows`` into successive blocks of at most ``size`` rows.
+
+    The export is cut twice, by the same rule at two scales: into the
+    ~1000-row folders that each become a file, and then into the 10-row
+    pages that each become a table. The last block of either is whatever
+    is left over - ``iloc`` stops at the end rather than running past it.
+    """
+    for start in range(0, len(rows), size):
+        yield rows.iloc[start:start + size]
+
 
 def _format_duration(seconds: float) -> str:
     """Format seconds as ``'Xs'`` or ``'Xm Ys'``."""
@@ -326,11 +339,8 @@ def build_folder_document(
     # Pages in a *full* folder — used so page numbering continues across files
     pages_per_full_folder = (ROWS_PER_FILE + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
 
-    for page_num in range(1, pages_in_file + 1):
-        start = (page_num - 1) * ROWS_PER_PAGE
-        end = min(start + ROWS_PER_PAGE, len(folder_rows))
-        page_rows = folder_rows.iloc[start:end]
-
+    for page_num, page_rows in enumerate(
+            in_blocks_of(folder_rows, ROWS_PER_PAGE), start=1):
         add_page_table(doc, header, page_rows, column_widths)
 
         global_page = page_num + (folder_number - 1) * pages_per_full_folder
@@ -372,11 +382,8 @@ def main() -> None:
 
     overall_start = time.perf_counter()
 
-    for folder_number in range(1, total_files + 1):
-        start = (folder_number - 1) * ROWS_PER_FILE
-        end = min(start + ROWS_PER_FILE, len(df))
-        folder_rows = df.iloc[start:end]
-
+    for folder_number, folder_rows in enumerate(
+            in_blocks_of(df, ROWS_PER_FILE), start=1):
         first_id = str(folder_rows.iloc[0, 0])
         last_id = str(folder_rows.iloc[-1, 0])
 

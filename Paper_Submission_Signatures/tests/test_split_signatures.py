@@ -12,6 +12,7 @@ from split_signatures_into_folders import (
     PAGE_WIDTH_CM,
     RIGHT_MARGIN_CM,
     apply_full_table_borders,
+    in_blocks_of,
     build_folder_document,
     read_signatures_csv,
     scale_column_widths,
@@ -270,3 +271,29 @@ class TestTableBorders:
         assert 'w:val="single"' in xml   # solid, not dashed
         assert 'w:sz="4"' in xml         # eighths of a point -> 0.5 pt
         assert 'w:color="000000"' in xml
+
+
+# ---------------------------------------------------------------------------
+# Cutting the rows into blocks
+# ---------------------------------------------------------------------------
+
+class TestInBlocksOf:
+    def _rows(self, n):
+        return pd.DataFrame({"a": range(n)})
+
+    @pytest.mark.parametrize("total,size,expected", [
+        (10, 10, [10]),          # exactly one full block
+        (11, 10, [10, 1]),       # the ragged last block
+        (9, 10, [9]),            # less than one block
+        (25, 10, [10, 10, 5]),
+        (1000, 10, [10] * 100),  # one real submission folder
+        (0, 10, []),             # nothing at all
+    ])
+    def test_the_last_block_is_whatever_is_left(self, total, size, expected):
+        blocks = list(in_blocks_of(self._rows(total), size))
+        assert [len(b) for b in blocks] == expected
+
+    def test_no_row_is_lost_or_repeated(self):
+        rows = self._rows(1001)
+        seen = pd.concat(list(in_blocks_of(rows, 10)))
+        assert list(seen["a"]) == list(range(1001))
