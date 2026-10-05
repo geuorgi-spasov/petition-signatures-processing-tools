@@ -40,7 +40,7 @@ Follow **one** of the two paths below — whichever matches your computer.
 2. **Install the font:** double-click `bebasneuecyrillic.ttf` in this
    folder and press *Install*.
 3. **Put your `book_signatures_only_names.csv` in this folder.**
-4. **Double-click `run.bat`.**
+4. **Double-click `run-windows.bat`.**
 
 ### Linux and macOS
 
@@ -60,15 +60,15 @@ Follow **one** of the two paths below — whichever matches your computer.
 4. **Open Terminal in this folder and run:**
 
    ```
-   ./run.sh
+   ./run-linux-macos.sh
    ```
 
-That's it. `run.bat` and `run.sh` install what the script needs and then
-build the book. The first run takes an extra minute to set itself up;
+That's it. The launcher installs what the script needs and then
+builds the book. The first run takes an extra minute to set itself up;
 after that it's about 15 seconds for ~111,000 names.
 
 To see the layout and the page count *without* writing anything, add
-`--dry-run` — `run.bat --dry-run` or `./run.sh --dry-run`.
+`--dry-run` — `run-windows.bat --dry-run` or `./run-linux-macos.sh --dry-run`.
 
 ### Prefer to run it yourself?
 
@@ -355,8 +355,8 @@ Book_Initials_Signatures/
 ├── requirements.txt
 ├── bebasneuecyrillic.ttf                   (bundled font, install once)
 ├── generate_initials_book.py
-├── run.bat                                 (Windows: double-click to start)
-├── run.sh                                  (Linux/macOS: ./run.sh)
+├── run-windows.bat                         (Windows: double-click it)
+├── run-linux-macos.sh                      (Linux/macOS: ./run-linux-macos.sh)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_requirements.txt

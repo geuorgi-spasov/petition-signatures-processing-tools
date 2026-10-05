@@ -48,7 +48,7 @@ Follow **one** of the two paths below — whichever matches your computer.
    (Word in a browser at office.com doesn't count; the script opens the
    Word program itself.)
 3. **Put your `Signatures_from_the_database_raw.csv` in this folder.**
-4. **Double-click `run.bat`.**
+4. **Double-click `run-windows.bat`.**
 
 ### Linux and macOS
 
@@ -68,15 +68,15 @@ Follow **one** of the two paths below — whichever matches your computer.
 4. **Open Terminal in this folder and run:**
 
    ```
-   ./run.sh
+   ./run-linux-macos.sh
    ```
 
 ### What happens then
 
-`run.bat` and `run.sh` do the whole job. First they fill
+The launcher does the whole job. First it fills
 `signatures_docx/` with one Word file per 1000 signatures — about 13
-minutes for 111 files. Then they fill `signatures_pdf/` with a PDF of
-each one, printing which program they are using. That takes about 5
+minutes for 111 files. Then it fills `signatures_pdf/` with a PDF of
+each one, printing which program it is using. That takes about 5
 minutes with LibreOffice, or around 40 with Word, which is much slower
 to start up.
 
@@ -166,7 +166,7 @@ python convert_docx_to_pdf.py --word
 ```
 
 Through the launcher, the option is passed straight through:
-`run.bat --libreoffice` or `./run.sh --libreoffice`.
+`run-windows.bat --libreoffice` or `./run-linux-macos.sh --libreoffice`.
 
 Word is the default because the .docx format is Word's own, so its
 rendering is the reference one — and it is what produced the documents
@@ -357,8 +357,8 @@ Paper_Submission_Signatures/
 ├── requirements.txt
 ├── split_signatures_into_folders.py
 ├── convert_docx_to_pdf.py
-├── run.bat                                 (Windows: double-click to start)
-├── run.sh                                  (Linux/macOS: ./run.sh)
+├── run-windows.bat                         (Windows: double-click it)
+├── run-linux-macos.sh                      (Linux/macOS: ./run-linux-macos.sh)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_requirements.txt               (extras for running tests)
