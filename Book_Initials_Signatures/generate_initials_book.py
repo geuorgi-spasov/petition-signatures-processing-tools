@@ -303,7 +303,8 @@ def names_to_initials(names: pd.DataFrame) -> list[str]:
     # The first character as it stands, whatever it is. The export holds a
     # few names beginning with a digit or a mark ("2milyanov", "?milyanov"),
     # and the book should show what the record says rather than guess at a
-    # correction. Only a name that is empty counts as no name.
+    # correction. Space around a name was stripped above, so it is never the
+    # first character; a name that is empty or only space counts as no name.
     first_initial = first_names.str[:1].str.upper()
     last_initial = last_names.str[:1].str.upper()
     has_first = first_initial != ""

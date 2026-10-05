@@ -89,9 +89,9 @@ class TestNamesToInitials:
             ("'milyanov", "'"),      # quote
             (".milyanov", "."),      # dot
             ("-milyanov", "-"),      # dash
-            ("…milyanov", "…"),      # ellipsis
+            ("...milyanov", "."),    # three dots: the first symbol is a dot
+            ("…milyanov", "…"),      # but an ellipsis is itself one character
             ("#@!milyanov", "#"),    # several at once: still just the first
-            ("  2milyanov  ", "2"),  # surrounding spaces are stripped first
             ("2", "2"),              # a name that is only the odd character
             (".", "."),
             ("Иван", "И"),           # the ordinary case still works
@@ -104,8 +104,23 @@ class TestNamesToInitials:
         names = pd.DataFrame([[name, "Иванов"]])
         assert names_to_initials(names) == [f"{initial}. И."]
 
-    @pytest.mark.parametrize("name", ["", "   ", "\t", None])
-    def test_only_an_empty_name_counts_as_missing(self, name):
+    # Space around a name is not part of it, so it never becomes an initial.
+    @pytest.mark.parametrize(
+        "name,initial",
+        [
+            ("  Иван", "И"),         # leading spaces
+            ("Иван  ", "И"),         # trailing spaces
+            ("\t Иван", "И"),        # a tab
+            ("\xa0Иван", "И"),       # a non-breaking space
+            ("  2milyanov  ", "2"),  # and around an odd character too
+        ],
+    )
+    def test_space_around_a_name_is_ignored(self, name, initial):
+        names = pd.DataFrame([[name, "Иванов"]])
+        assert names_to_initials(names) == [f"{initial}. И."]
+
+    @pytest.mark.parametrize("name", ["", "   ", "\t", "\xa0", None])
+    def test_a_name_that_is_empty_or_only_space_counts_as_missing(self, name):
         names = pd.DataFrame([[name, "Иванов"], [name, name]])
         assert names_to_initials(names) == ["И."]
 
