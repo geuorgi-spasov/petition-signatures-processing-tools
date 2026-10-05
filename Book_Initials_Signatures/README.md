@@ -292,12 +292,50 @@ A successful run looks like:
 
 ```
 ======================== test session starts ========================
-collected 52 items
+collected 72 items
 
 tests/test_generate_initials_book.py ....................    [100%]
 
-======================== 52 passed in 0.8s ==========================
+======================== 72 passed in 0.9s ==========================
 ```
+
+### Checking the real PDF
+
+Unit tests can only prove the layout arithmetic is self-consistent. They
+cannot tell you how many lines Word will actually put on a page — and when
+the two disagree the book comes out wrong while every test still passes.
+That is how a 378-page book once became a 755-page one.
+
+`tests/check_rendering.py` closes that gap: it builds the book, has
+LibreOffice or Word turn it into a PDF, and compares the result with the
+prediction. It needs one of those programs installed.
+
+```
+python tests/check_rendering.py
+```
+
+```
+Rendering 20,000 initials with LibreOffice...
+
+                   predicted      actual
+lines on a page           42          42
+pages                     69          69
+
+OK — +0% against the prediction, within the 10% allowed.
+```
+
+A few percent either way is normal — the programs genuinely differ. A big
+difference fails the check and says what the program really fits:
+
+```
+FAILED — 87% more pages than predicted. This program fits ~22 lines on a
+page, not 42.
+```
+
+Worth running on any machine whose output matters, a Windows one above
+all, since Word and LibreOffice do not paginate alike.
+
+### Benchmarking the layouts
 
 `tests/benchmark_initials_book.py` compares the build time and the page
 count of different column counts — one line is one paragraph, so more
@@ -368,6 +406,7 @@ Book_Initials_Signatures/
 │   ├── conftest.py
 │   ├── test_requirements.txt
 │   ├── benchmark_initials_book.py          (layout speed comparison)
+│   ├── check_rendering.py                  (real PDF vs the prediction)
 │   └── test_generate_initials_book.py
 ├── book_signatures_only_names.csv          (your input)
 └── book_signatures_initials.docx           (the generated output)

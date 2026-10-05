@@ -76,13 +76,34 @@ class TestNamesToInitials:
         names = pd.DataFrame([[None, None], ["", ""], ["Иван", "Иванов"]])
         assert names_to_initials(names) == ["И. И."]
 
-    def test_a_leading_digit_or_mark_is_not_used_as_an_initial(self):
-        # The exported data contains names like "2milyanov" and "?milyanov".
-        names = pd.DataFrame([["Емил", "2milyanov"], ["?milyanov", "Михайлов"]])
-        assert names_to_initials(names) == ["Е. M.", "M. М."]
+    # The export really does contain names like these - 60 rows of it.
+    # The initial is the first *letter*, whatever junk precedes it.
+    @pytest.mark.parametrize(
+        "name,initial",
+        [
+            ("2milyanov", "M"),      # digit
+            ("0milyanov", "M"),
+            ("?milyanov", "M"),      # question mark
+            ("^milyanov", "M"),      # caret
+            ("'milyanov", "M"),      # quote
+            (".milyanov", "M"),      # dot
+            ("-milyanov", "M"),      # dash
+            ("…milyanov", "M"),      # ellipsis
+            ("#@!milyanov", "M"),    # several at once
+            ("  2milyanov  ", "M"),  # and with spaces around it
+            ("Иван", "И"),           # the ordinary case still works
+            ("иван", "И"),
+        ],
+    )
+    def test_the_initial_is_the_first_letter_whatever_precedes_it(
+        self, name, initial
+    ):
+        names = pd.DataFrame([[name, "Иванов"]])
+        assert names_to_initials(names) == [f"{initial}. И."]
 
-    def test_a_name_with_no_letters_at_all_counts_as_missing(self):
-        names = pd.DataFrame([[".", "Иванов"], [".", "."]])
+    @pytest.mark.parametrize("name", ["2", ".", "?", "^", "...", "123", "   "])
+    def test_a_name_with_no_letters_at_all_counts_as_missing(self, name):
+        names = pd.DataFrame([[name, "Иванов"], [name, name]])
         assert names_to_initials(names) == ["И."]
 
     def test_empty_input(self):
