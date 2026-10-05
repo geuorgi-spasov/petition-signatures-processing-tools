@@ -88,8 +88,10 @@ DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 #   utf-8    what a modern export should be. Fails loudly on anything else,
 #            and pandas strips the byte-order mark Excel writes, so a
 #            separate utf-8-sig entry would never be reached.
-#   cp1251   Windows Cyrillic - what Excel saves Bulgarian text as. utf-8
-#            rejects those bytes, so this is reachable.
+#   cp1251   Windows Cyrillic, the usual encoding for Bulgarian text
+#            out of Excel. utf-8 rejects those bytes, so this is
+#            reachable - that part is tested; which tool produced any
+#            given file is not something this script can know.
 #   latin-1  LAST RESORT, and it must stay last: it maps every one of the
 #            256 byte values to a character, so it can never fail. Put it
 #            earlier and it swallows the file, turning "Иван" into "Èâàí"
@@ -376,11 +378,11 @@ def main() -> None:
 
     overall_start = time.perf_counter()
 
-    # One file per folder of signatures. The name carries the range of
-    # database IDs inside it - "Папка 7 с подписи от 6001 до 7000" - so
-    # that a paper folder on a desk can be matched to its document
-    # without opening it. Column 0 is that ID, which is why the first and
-    # last row are read before the document is built.
+    # One file per folder of signatures, named for the range of database
+    # IDs it holds: "Папка 7 с подписи от 6001 до 7000". Column Номер is
+    # column 0 and runs 1 to 110,942 in order, so the range identifies a
+    # folder exactly - which is why the first and last row are read before
+    # the document is built.
     for folder_number, folder_rows in enumerate(
             in_blocks_of(df, ROWS_PER_FILE), start=1):
         first_id = str(folder_rows.iloc[0, 0])

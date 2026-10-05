@@ -208,21 +208,24 @@ def _decodes(data: bytes, encoding: str) -> bool:
 # ---------------------------------------------------------------------------
 
 class TestSeparators:
-    def test_a_comma_in_the_address_does_not_beat_the_real_separator(
+    def test_a_comma_inside_a_field_does_not_beat_the_real_separator(
         self, tmp_path
     ):
-        # Bulgarian addresses are full of commas. The file is tab-separated,
-        # so the tab must win or every field shifts one column left.
+        # The export this script reads has no field with a comma in it -
+        # "Имейл адрес" is an email address, not a postal one. This is a
+        # hypothetical third column, standing for any future field that
+        # does: the file is tab-separated, so the tab must win or every
+        # field shifts one column left.
         path = tmp_path / "signatures.csv"
         path.write_text(
-            "Номер\tИме\tАдрес\n"
-            "1\tИван Иванов\tгр. София, ул. Витоша 5\n"
-            "2\tМария Маринова\tгр. Пловдив, бул. Руски 12\n",
+            "Номер\tИме\tБележка\n"
+            "1\tИван Иванов\tпърва, втора\n"
+            "2\tМария Маринова\tтрета, четвърта\n",
             encoding="utf-8",
         )
         df = read_signatures_csv(str(path))
-        assert list(df.columns) == ["Номер", "Име", "Адрес"]
-        assert df.iloc[0]["Адрес"] == "гр. София, ул. Витоша 5"
+        assert list(df.columns) == ["Номер", "Име", "Бележка"]
+        assert df.iloc[0]["Бележка"] == "първа, втора"
 
     def test_a_genuine_comma_file_still_works(self, tmp_path):
         # Ordering the comma last must not stop it being found when it
@@ -234,7 +237,7 @@ class TestSeparators:
 
     def test_the_comma_is_tried_last(self):
         # A separator cannot fail the way an encoding can, so the one most
-        # likely to appear inside the data has to be the last resort.
+        # likely to appear inside a field has to be tried last.
         assert CSV_SEPARATORS[-1] == ","
         assert set(CSV_SEPARATORS) == {"\t", "|", ";", ","}
 

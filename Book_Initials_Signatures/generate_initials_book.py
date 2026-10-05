@@ -92,8 +92,10 @@ CHARACTER_WIDTH_EM = 0.42
 #   utf-8    what a modern export should be. Fails loudly on anything else,
 #            and pandas strips the byte-order mark Excel writes, so a
 #            separate utf-8-sig entry would never be reached.
-#   cp1251   Windows Cyrillic — what Excel saves Bulgarian text as. utf-8
-#            rejects those bytes, so this is reachable.
+#   cp1251   Windows Cyrillic, the usual encoding for Bulgarian text
+#            out of Excel. utf-8 rejects those bytes, so this is
+#            reachable - that part is tested; which tool produced any
+#            given file is not something this script can know.
 #   latin-1  LAST RESORT, and it must stay last: it maps every one of the
 #            256 byte values to a character, so it can never fail. Put it
 #            earlier and it swallows the file, turning "Иван" into "Èâàí"
