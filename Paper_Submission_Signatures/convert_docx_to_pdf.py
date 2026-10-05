@@ -120,6 +120,14 @@ def _program_files_dirs() -> list[str]:
     return [directory for directory in found if directory]
 
 
+# Where the Windows installer puts Word, as path components rather than
+# one "a/b/c" string - see the note inside _find_word.
+WORD_PATTERNS = (
+    ("Microsoft Office", "root", "Office*", "WINWORD.EXE"),
+    ("Microsoft Office", "Office*", "WINWORD.EXE"),
+)
+
+
 def _find_word() -> str | None:
     """Return the path to the Microsoft Word application, or None.
 
@@ -133,12 +141,17 @@ def _find_word() -> str | None:
     if not sys.platform.startswith("win"):
         return None
 
+    # Written as separate path components, not as one "a/b/c" string:
+    # os.path.join would keep those forward slashes on Windows and hand
+    # back a mixed path like "...\Microsoft Office/root\Office16\
+    # WINWORD.EXE". glob still matches it, so Word is found
+    # either way - but the path is then compared and printed, and a path
+    # that cannot be compared to the same path is a bug waiting to happen.
     for directory in _program_files_dirs():
-        for pattern in ("Microsoft Office/root/Office*/WINWORD.EXE",
-                        "Microsoft Office/Office*/WINWORD.EXE"):
-            matches = glob.glob(os.path.join(directory, pattern))
+        for parts in WORD_PATTERNS:
+            matches = glob.glob(os.path.join(directory, *parts))
             if matches:
-                return matches[0]
+                return os.path.normpath(matches[0])
     return shutil.which("winword")
 
 

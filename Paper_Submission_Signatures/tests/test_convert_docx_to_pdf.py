@@ -214,6 +214,18 @@ class TestFindWord:
         monkeypatch.setattr(converter, "_program_files_dirs", lambda: [str(tmp_path)])
         assert converter._find_word() == str(word)
 
+    def test_the_path_it_returns_uses_one_kind_of_separator(self):
+        # Regression: the search patterns used to be single strings with
+        # "/" inside them. os.path.join keeps those as-is, so on Windows
+        # the result came back as "...\\Microsoft Office/root\\Office16
+        # \\WINWORD.EXE" - found, but not equal to the same path spelled
+        # natively. This checks the joining rule itself under Windows
+        # semantics, so it fails on Linux too if the patterns regress.
+        import ntpath
+        for parts in converter.WORD_PATTERNS:
+            joined = ntpath.join(r"C:\Program Files", *parts)
+            assert "/" not in joined, joined
+
     def test_no_word_on_linux(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "linux")
         assert converter._find_word() is None
