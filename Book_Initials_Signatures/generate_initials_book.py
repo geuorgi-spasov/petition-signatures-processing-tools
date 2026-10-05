@@ -76,6 +76,10 @@ CHARACTER_WIDTH_EM = 0.42
 # Separators tried when auto-detecting the CSV format
 CSV_SEPARATORS = [",", ";", "\t", "|"]
 
+# The first letter of a name — not the first character, which in real data
+# is sometimes a digit, a dot or a quote mark.
+FIRST_LETTER = r"([^\W\d_])"
+
 
 class LayoutError(ValueError):
     """Raised when a layout cannot be printed on the chosen page size."""
@@ -164,7 +168,11 @@ class Layout:
         return self.columns * self.lines_per_page
 
     def pages_for(self, total_initials: int) -> int:
-        """How many pages that many sets of initials take in this layout."""
+        """Roughly how many pages that many sets of initials will take.
+
+        An estimate, not a promise: Word, Word on the web and LibreOffice
+        each fit a slightly different number of lines on a page.
+        """
         return math.ceil(total_initials / self.initials_per_page)
 
     def column_offsets_cm(self) -> list[float]:
@@ -186,8 +194,9 @@ class Layout:
             f"        {self.font_size_pt:g} pt font, {self.margin_cm:g} cm "
             f"offsets, {self.column_gap_cm:g} cm between the initials, "
             f"line spacing {self.line_spacing:g}\n"
-            f"        {total_initials:,} initials -> "
-            f"{self.pages_for(total_initials):,} page(s)"
+            f"        {total_initials:,} initials -> about "
+            f"{self.pages_for(total_initials):,} "
+            f"{'page' if self.pages_for(total_initials) == 1 else 'pages'}"
         )
 
     # -- the rules ----------------------------------------------------------
@@ -287,15 +296,20 @@ def read_two_column_csv(path: str) -> pd.DataFrame:
 def names_to_initials(names: pd.DataFrame) -> list[str]:
     """Turn each (first name, last name) row into initials like ``И. И.``.
 
-    Rows with no name at all are dropped; a row with only one name gives a
+    Rows with no usable name are dropped; a row with only one name gives a
     single initial. Uses vectorized pandas operations (~20× faster than
     row-by-row iteration on large datasets).
     """
     first_names = names.iloc[:, 0].fillna("").astype(str).str.strip()
     last_names = names.iloc[:, 1].fillna("").astype(str).str.strip()
 
-    first_initial = first_names.str[:1].str.upper()
-    last_initial = last_names.str[:1].str.upper()
+    # The first *letter*, so that a stray digit or punctuation mark at the
+    # start of a name (the data has a few: "2milyanov", "?milyanov", ".")
+    # does not become somebody's initial.
+    first_initial = first_names.str.extract(FIRST_LETTER, expand=False)
+    last_initial = last_names.str.extract(FIRST_LETTER, expand=False)
+    first_initial = first_initial.fillna("").str.upper()
+    last_initial = last_initial.fillna("").str.upper()
     has_first = first_initial != ""
     has_last = last_initial != ""
 
@@ -336,6 +350,8 @@ def apply_page_style(
     style = doc.styles["Normal"]
     style.font.name = font_name
     style.font.size = Pt(layout.font_size_pt)
+    # Initials are not words; without this Word underlines every one of them.
+    style.font.no_proof = True
 
     paragraph_style = style.paragraph_format
     paragraph_style.space_before = Pt(0)
@@ -353,17 +369,19 @@ def build_initials_document(
 ) -> DocumentType:
     """Build the document: one paragraph per line, columns split by tabs.
 
+    Pages are left to the program that opens the document. Forcing a break
+    every ``lines_per_page`` lines was worse: Word fits two lines fewer on
+    an A5 page than the arithmetic predicts, so every forced page spilled
+    its last two lines onto a second one and the book came out at twice
+    the length. Flowing naturally, a page is simply as full as it can be.
+
     Assumes ``layout`` has been validated.
     """
     doc = Document()
     apply_page_style(doc, layout, font_name)
 
-    for line_number, line in enumerate(group_into_lines(initials, layout.columns)):
-        paragraph = doc.add_paragraph("\t".join(line))
-        # Break exactly where the layout says a page ends, so the printed
-        # page count is the reported one.
-        if line_number and line_number % layout.lines_per_page == 0:
-            paragraph.paragraph_format.page_break_before = True
+    for line in group_into_lines(initials, layout.columns):
+        doc.add_paragraph("\t".join(line))
 
     return doc
 
@@ -431,7 +449,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     initials = names_to_initials(names)
-    print(f"  {len(names):,} rows, {len(initials):,} initials extracted.\n")
+    print(f"  {len(names):,} rows, {len(initials):,} initials extracted.")
+    unusable = len(names) - len(initials)
+    if unusable:
+        print(f"  {unusable:,} row(s) held no name at all and were skipped.")
+    print()
     print(layout.describe(len(initials)))
 
     if args.dry_run:
@@ -443,9 +465,9 @@ def main(argv: list[str] | None = None) -> int:
     document.save(args.output)
 
     print(
-        f"Done in {time.perf_counter() - started:.0f}s — "
-        f"{layout.pages_for(len(initials)):,} page(s) when printed or "
-        f"exported to PDF."
+        f"Done in {time.perf_counter() - started:.0f}s — about "
+        f"{layout.pages_for(len(initials)):,} pages when printed or exported "
+        f"to PDF (the program that prints it decides the exact number)."
     )
     return 0
 

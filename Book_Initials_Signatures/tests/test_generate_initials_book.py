@@ -76,6 +76,15 @@ class TestNamesToInitials:
         names = pd.DataFrame([[None, None], ["", ""], ["Иван", "Иванов"]])
         assert names_to_initials(names) == ["И. И."]
 
+    def test_a_leading_digit_or_mark_is_not_used_as_an_initial(self):
+        # The exported data contains names like "2milyanov" and "?milyanov".
+        names = pd.DataFrame([["Емил", "2milyanov"], ["?milyanov", "Михайлов"]])
+        assert names_to_initials(names) == ["Е. M.", "M. М."]
+
+    def test_a_name_with_no_letters_at_all_counts_as_missing(self):
+        names = pd.DataFrame([[".", "Иванов"], [".", "."]])
+        assert names_to_initials(names) == ["И."]
+
     def test_empty_input(self):
         assert names_to_initials(pd.DataFrame(columns=[0, 1])) == []
 
@@ -161,7 +170,7 @@ class TestLayoutMaths:
         summary = DEFAULT.describe(1000)
         assert "A5" in summary
         assert "7 column(s)" in summary
-        assert "4 page(s)" in summary
+        assert "about 4 pages" in summary
 
 
 # ---------------------------------------------------------------------------
@@ -265,13 +274,19 @@ class TestBuildInitialsDocument:
             three.column_offsets_cm()[1:], abs=0.01
         )
 
-    def test_a_page_break_starts_every_page_after_the_first(self):
-        initials = [f"{i}." for i in range(1000)]  # 294 per page, so 4 pages
-        assert DEFAULT.pages_for(len(initials)) == 4
+    def test_no_page_breaks_are_forced(self):
+        # Word fits fewer lines on a page than the arithmetic predicts, so a
+        # forced break left the last lines of each page orphaned on the next
+        # one and doubled the length of the book. Pages are the program's job.
+        initials = [f"{i}." for i in range(1000)]
         doc = build_initials_document(initials, DEFAULT)
-        breaks = [i for i, p in enumerate(doc.paragraphs)
-                  if p.paragraph_format.page_break_before]
-        assert breaks == [LINES_PER_PAGE, 2 * LINES_PER_PAGE, 3 * LINES_PER_PAGE]
+        assert not any(
+            p.paragraph_format.page_break_before for p in doc.paragraphs
+        )
+
+    def test_initials_are_not_spell_checked(self):
+        doc = build_initials_document(["И. И."], DEFAULT)
+        assert doc.styles["Normal"].font.no_proof is True
 
 
 # ---------------------------------------------------------------------------
@@ -296,7 +311,7 @@ class TestMain:
     def test_dry_run_reports_the_pages_without_writing(self, names_csv, capsys):
         assert main(["--input", "names.csv", "--dry-run"]) == 0
         assert not (names_csv / "book_signatures_initials.docx").exists()
-        assert "1 page(s)" in capsys.readouterr().out
+        assert "about 1 page" in capsys.readouterr().out
 
     def test_a_missing_input_file_is_reported(self, names_csv, capsys):
         assert main(["--input", "nope.csv"]) == 1

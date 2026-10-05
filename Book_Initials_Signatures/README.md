@@ -91,7 +91,8 @@ Run the `source .venv/bin/activate` part again in any new terminal.
 
 The output `book_signatures_initials.docx` appears in the same folder.
 Print it, or export it to PDF from Word (*File → Save as → PDF*) — the
-PDF has exactly the number of pages the script reported.
+PDF will be about as long as the script reported; the exact number is up
+to whichever program prints it, and they differ a little.
 
 ---
 
@@ -226,6 +227,12 @@ use is split evenly on both sides.
 3. One line holds `--columns` sets of initials, so a page holds
    7 × 42 = **294**, and the page count is the number of initials divided
    by that, rounded up.
+
+That number is an **estimate**. Word, Word on the web and LibreOffice each
+fit a slightly different number of lines on a page — Word fits two fewer
+than the arithmetic predicts on A5 — so treat it as "about 378 pages",
+not a guarantee. The document itself is unaffected: no page breaks are
+forced, so every page comes out as full as the program can make it.
 
 So **a bigger font gives more pages** and **more columns give fewer
 pages**. For the ~111,000 names in the sample CSV:
