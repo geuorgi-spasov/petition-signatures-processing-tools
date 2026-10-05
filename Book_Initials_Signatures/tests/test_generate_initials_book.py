@@ -12,6 +12,8 @@ import pandas as pd
 import pytest
 
 from generate_initials_book import (
+    CSV_ENCODINGS,
+    CSV_SEPARATORS,
     Layout,
     LayoutError,
     build_initials_document,
@@ -364,3 +366,112 @@ class TestMain:
         assert code == 1
         assert not (names_csv / "out.docx").exists()
         assert "Use at most 7 column(s)" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Encodings
+# ---------------------------------------------------------------------------
+
+# Two columns, no header — the shape this script expects.
+BULGARIAN_ROWS = "Иван,Иванов\nМария,Маринова\n"
+
+
+def _write(path, text, encoding):
+    path.write_bytes(text.encode(encoding))
+    return str(path)
+
+
+def _decodes(data: bytes, encoding: str) -> bool:
+    try:
+        data.decode(encoding)
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+class TestEncodings:
+    @pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "cp1251"])
+    def test_bulgarian_names_survive_the_round_trip(self, tmp_path, encoding):
+        path = _write(tmp_path / "names.csv", BULGARIAN_ROWS, encoding)
+        names = read_two_column_csv(path)
+        assert (names.iloc[0, 0], names.iloc[0, 1]) == ("Иван", "Иванов")
+        assert names_to_initials(names) == ["И. И.", "М. М."]
+
+    def test_the_last_resort_is_last(self):
+        # latin-1 decodes any byte at all, so anything after it could never
+        # be reached — and anything before it must be able to fail.
+        assert CSV_ENCODINGS[-1] == "latin-1"
+        assert bytes(range(256)).decode("latin-1")
+        for earlier in CSV_ENCODINGS[:-1]:
+            with pytest.raises(UnicodeDecodeError):
+                bytes(range(256)).decode(earlier)
+
+    def test_every_encoding_in_the_list_is_reachable(self):
+        # An encoding is only worth listing if the ones before it reject
+        # the bytes it is there to catch. The last resort is exempt — its
+        # whole job is to catch what nothing else did.
+        middle = CSV_ENCODINGS[1:-1]
+        assert middle, "nothing between utf-8 and the last resort to check"
+        for position, encoding in enumerate(middle, start=1):
+            sample = BULGARIAN_ROWS.encode(encoding)
+            assert any(
+                not _decodes(sample, earlier)
+                for earlier in CSV_ENCODINGS[:position]
+            ), f"{encoding} is shadowed by the encodings before it"
+
+    @pytest.mark.parametrize("shadowed", ["cp866", "cp1252", "iso-8859-1"])
+    def test_the_encodings_left_out_really_are_unreachable(self, shadowed):
+        # Each is decoded without error by an encoding that comes before it
+        # in the list, so it could never have been reached.
+        assert _decodes(BULGARIAN_ROWS.encode("cp1251"), "cp1251")
+        assert _decodes(bytes(range(256)), "latin-1")
+        assert shadowed not in CSV_ENCODINGS
+
+    def test_an_unreadable_file_says_what_was_tried(self, tmp_path):
+        path = tmp_path / "one_column.csv"
+        path.write_text("just_one_column\nstill_one\n", encoding="utf-8")
+        with pytest.raises(ValueError) as error:
+            read_two_column_csv(str(path))
+        assert "Tried separators" in str(error.value)
+        assert "cp1251" in str(error.value)
+
+
+# ---------------------------------------------------------------------------
+# Separators
+# ---------------------------------------------------------------------------
+
+class TestSeparators:
+    def test_a_comma_inside_a_field_does_not_beat_the_real_separator(
+        self, tmp_path
+    ):
+        # The row is tab-separated and the first field contains a comma.
+        # Splitting on the comma also yields two columns, so the column
+        # count cannot tell the two apart - only the separator order can.
+        csv = tmp_path / "names.csv"
+        csv.write_text("Иван, Петър\tИванов\nМария, Анна\tМаринова\n",
+                       encoding="utf-8")
+        names = read_two_column_csv(str(csv))
+        assert (names.iloc[0, 0], names.iloc[0, 1]) == ("Иван, Петър", "Иванов")
+        assert names_to_initials(names) == ["И. И.", "М. М."]
+
+    def test_a_comma_inside_a_semicolon_file_loses_too(self, tmp_path):
+        # Surname-first exports put a comma in the name itself.
+        csv = tmp_path / "names.csv"
+        csv.write_text("Иванов, Иван;Петров\nДимитров, Анна;Георгиев\n",
+                       encoding="utf-8")
+        names = read_two_column_csv(str(csv))
+        assert names_to_initials(names) == ["И. П.", "Д. Г."]
+
+    def test_a_genuine_comma_file_still_works(self, tmp_path):
+        # Ordering the comma last must not stop it being found when it
+        # really is the separator.
+        csv = tmp_path / "names.csv"
+        csv.write_text("Иван,Иванов\nМария,Маринова\n", encoding="utf-8")
+        names = read_two_column_csv(str(csv))
+        assert names_to_initials(names) == ["И. И.", "М. М."]
+
+    def test_the_comma_is_tried_last(self):
+        # A separator cannot fail the way an encoding can, so the one most
+        # likely to appear inside the data has to be the last resort.
+        assert CSV_SEPARATORS[-1] == ","
+        assert set(CSV_SEPARATORS) == {"\t", "|", ";", ","}

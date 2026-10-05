@@ -146,8 +146,9 @@ If the name shown differs, set `FONT_NAME` in
 ## What the input should look like
 
 A CSV with **two columns**: first name and last name, one signatory
-per row. Any common separator works (comma, semicolon, tab, pipe).
-Example:
+per row. Any common separator works (comma, semicolon, tab, pipe),
+and the script auto-detects the encoding — UTF-8, or the Windows
+Cyrillic `cp1251` that Excel saves Bulgarian text as. Example:
 
 ```
 Иван,Иванов
@@ -265,7 +266,7 @@ class:
 
 | | |
 | --- | --- |
-| `read_two_column_csv()` | reads the CSV, trying the usual separators |
+| `read_two_column_csv()` | reads the CSV, trying the usual separators and encodings |
 | `names_to_initials()` | `Иван, Иванов` → `И. И.`, in one vectorised pandas pass |
 | `Layout` | the five numbers above. Every other figure — the width of one set of initials, the lines per page, the page count — is a property derived from them and from the page size |
 | `Layout.validate()` | the three rules: the values make sense, the columns fit across the page, a line fits down it. Raises `LayoutError` with the message you saw above |
@@ -371,6 +372,10 @@ python tests/benchmark_initials_book.py --limit 20000
 - **`Could not parse '…' into at least two columns`** — open the file
   in a text editor and check that columns are separated by commas,
   semicolons, tabs, or `|`. If possible, re-save as UTF-8.
+- **The initials read `È. È.` instead of `И. И.`** — the script will
+  have warned that it fell back to `latin-1`, which accepts any file
+  at all and so is only ever a guess. Re-save the CSV as UTF-8 and
+  run it again.
 - **The initials look like rectangles or the font looks wrong** — the
   Bebas Neue Cyrillic font isn't installed on your system. Install it
   using one of the commands above and re-run. If you're on Windows,

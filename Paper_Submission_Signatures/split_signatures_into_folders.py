@@ -69,6 +69,23 @@ DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 
 # Separators and encodings tried when auto-detecting the CSV format.
 #
+# Separators are ordered least-likely-to-appear-inside-a-field first, and
+# that order is load-bearing for the same reason the encoding order is.
+# Unlike an encoding, a separator cannot fail: several can each split the
+# same file into more than one column, and the first one tried wins. The
+# column count cannot break that tie - both splits look equally valid -
+# so only the characters themselves can:
+#
+#   \t and |   never occur inside this export's fields, so a file that
+#              splits on one of them really is separated by it.
+#   ;          occurs in prose but almost never in a name or an address.
+#   ,          LAST, and it must stay last: it is the one separator that
+#              turns up inside the data itself. Today's export is clean -
+#              no field in it contains a comma - but a later one carrying
+#              a free-text column (an address, say: "гр. София, ул.
+#              Витоша 5") would break the moment the comma were tried
+#              first, shifting every field one column to the left.
+#
 # The first encoding that decodes the file wins, so the order is what makes
 # this correct rather than merely successful. An encoding earns a place here
 # only if it can be reached - that is, only if the ones before it fail on
@@ -89,7 +106,7 @@ DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 # it would only suggest a coverage that is not there. The same goes for
 # cp1252 and iso-8859-1, which latin-1 shadows completely (iso-8859-1 is
 # not even a different codec - Python resolves both names to the same one).
-CSV_SEPARATORS = [",", ";", "\t", "|"]
+CSV_SEPARATORS = ["\t", "|", ";", ","]
 CSV_ENCODINGS = ["utf-8", "cp1251", "latin-1"]
 LAST_RESORT_ENCODING = "latin-1"
 
@@ -113,6 +130,8 @@ def _try_read_csv(path: str, sep: str, encoding: str = "utf-8") -> pd.DataFrame 
     """Return the DataFrame only if it parses into more than one column."""
     try:
         df = pd.read_csv(path, sep=sep, encoding=encoding)
+    except FileNotFoundError:
+        raise  # a missing file is not a parsing problem - report it
     except Exception:
         return None
     if len(df.columns) > 1:
@@ -167,36 +186,45 @@ def scale_column_widths(num_columns: int) -> list[float]:
     return [w * scale for w in widths]
 
 
+# A thin solid black line, as the four attributes OOXML wants on every
+# border edge. python-docx has no API for table borders - it models
+# fonts, widths and alignment, but not these - so the only way to draw a
+# gridline is to build the XML elements by hand.
+BORDER_STYLE = {
+    qn("w:val"): "single",   # a solid line, not dashed or doubled
+    qn("w:sz"): "4",         # thickness in eighths of a point: 0.5 pt
+    qn("w:space"): "0",      # no padding between the line and the text
+    qn("w:color"): "000000",
+}
+
+# A table styles its outer frame and its inner gridlines in one element;
+# a cell has only its own four sides.
+TABLE_EDGES = ("top", "left", "bottom", "right", "insideH", "insideV")
+CELL_EDGES = ("top", "left", "bottom", "right")
+
+
+def _borders_element(tag: str, edges: tuple[str, ...]):
+    """Build a ``<w:tblBorders>`` or ``<w:tcBorders>`` with every edge drawn."""
+    container = OxmlElement(tag)
+    for edge_name in edges:
+        edge = OxmlElement(f"w:{edge_name}")
+        for attribute, value in BORDER_STYLE.items():
+            edge.set(attribute, value)
+        container.append(edge)
+    return container
+
+
 def apply_full_table_borders(table: Table) -> None:
     """Draw visible single-line borders on every cell of the table."""
-    border_style = {
-        qn("w:val"): "single",
-        qn("w:sz"): "4",
-        qn("w:space"): "0",
-        qn("w:color"): "000000",
-    }
+    table._tbl.tblPr.append(_borders_element("w:tblBorders", TABLE_EDGES))
 
-    # Table-level borders (outer + inner)
-    tbl_pr = table._tbl.tblPr
-    tbl_borders = OxmlElement("w:tblBorders")
-    for name in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        edge = OxmlElement(f"w:{name}")
-        for attr, value in border_style.items():
-            edge.set(attr, value)
-        tbl_borders.append(edge)
-    tbl_pr.append(tbl_borders)
-
-    # Cell-level borders (belt and braces — some viewers need both)
+    # And again on each cell: belt and braces, because some viewers
+    # honour only the cell-level borders.
     for row in table.rows:
         for cell in row.cells:
-            tc_pr = cell._tc.get_or_add_tcPr()
-            tc_borders = OxmlElement("w:tcBorders")
-            for name in ("top", "left", "bottom", "right"):
-                edge = OxmlElement(f"w:{name}")
-                for attr, value in border_style.items():
-                    edge.set(attr, value)
-                tc_borders.append(edge)
-            tc_pr.append(tc_borders)
+            cell._tc.get_or_add_tcPr().append(
+                _borders_element("w:tcBorders", CELL_EDGES)
+            )
 
 
 def create_landscape_document() -> DocumentType:

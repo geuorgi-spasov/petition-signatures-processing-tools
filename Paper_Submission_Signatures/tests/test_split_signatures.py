@@ -6,10 +6,12 @@ import pytest
 
 from split_signatures_into_folders import (
     CSV_ENCODINGS,
+    CSV_SEPARATORS,
     DEFAULT_COLUMN_WIDTHS_CM,
     LEFT_MARGIN_CM,
     PAGE_WIDTH_CM,
     RIGHT_MARGIN_CM,
+    apply_full_table_borders,
     build_folder_document,
     read_signatures_csv,
     scale_column_widths,
@@ -177,6 +179,13 @@ class TestEncodings:
         assert _decodes(bytes(range(256)), "latin-1")
         assert shadowed not in CSV_ENCODINGS
 
+    def test_a_missing_file_is_reported_as_missing(self, tmp_path):
+        # Not as a parse failure: there is nothing to parse, and listing
+        # every separator and encoding "tried" would be a lie. main()
+        # has always had a handler for this - it just could not fire.
+        with pytest.raises(FileNotFoundError):
+            read_signatures_csv(str(tmp_path / "does_not_exist.csv"))
+
     def test_an_unreadable_file_says_what_was_tried(self, tmp_path):
         path = tmp_path / "one_column.csv"
         path.write_text("just_one_column\nstill_one\n", encoding="utf-8")
@@ -191,3 +200,73 @@ def _decodes(data: bytes, encoding: str) -> bool:
         return True
     except UnicodeDecodeError:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Separators
+# ---------------------------------------------------------------------------
+
+class TestSeparators:
+    def test_a_comma_in_the_address_does_not_beat_the_real_separator(
+        self, tmp_path
+    ):
+        # Bulgarian addresses are full of commas. The file is tab-separated,
+        # so the tab must win or every field shifts one column left.
+        path = tmp_path / "signatures.csv"
+        path.write_text(
+            "Номер\tИме\tАдрес\n"
+            "1\tИван Иванов\tгр. София, ул. Витоша 5\n"
+            "2\tМария Маринова\tгр. Пловдив, бул. Руски 12\n",
+            encoding="utf-8",
+        )
+        df = read_signatures_csv(str(path))
+        assert list(df.columns) == ["Номер", "Име", "Адрес"]
+        assert df.iloc[0]["Адрес"] == "гр. София, ул. Витоша 5"
+
+    def test_a_genuine_comma_file_still_works(self, tmp_path):
+        # Ordering the comma last must not stop it being found when it
+        # really is the separator.
+        path = tmp_path / "signatures.csv"
+        path.write_text("Номер,Име\n1,Иван\n2,Мария\n", encoding="utf-8")
+        df = read_signatures_csv(str(path))
+        assert list(df.columns) == ["Номер", "Име"]
+
+    def test_the_comma_is_tried_last(self):
+        # A separator cannot fail the way an encoding can, so the one most
+        # likely to appear inside the data has to be the last resort.
+        assert CSV_SEPARATORS[-1] == ","
+        assert set(CSV_SEPARATORS) == {"\t", "|", ";", ","}
+
+
+# ---------------------------------------------------------------------------
+# Table borders
+# ---------------------------------------------------------------------------
+
+class TestTableBorders:
+    def _table(self):
+        from docx import Document
+        doc = Document()
+        table = doc.add_table(rows=3, cols=4)
+        apply_full_table_borders(table)
+        return table
+
+    def test_the_table_gets_an_outer_frame_and_inner_gridlines(self):
+        xml = self._table()._tbl.xml
+        assert "<w:tblBorders>" in xml
+        for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            assert f"<w:{edge} " in xml, f"table edge {edge} missing"
+
+    def test_every_cell_gets_its_own_four_sides(self):
+        # Belt and braces: some viewers honour only the cell-level borders.
+        table = self._table()
+        for row in table.rows:
+            for cell in row.cells:
+                xml = cell._tc.xml
+                assert "<w:tcBorders>" in xml
+                assert xml.count("w:val=\"single\"") >= 4
+
+    def test_the_line_is_thin_solid_and_black(self):
+        xml = self._table()._tbl.xml
+        assert 'w:val="single"' in xml   # solid, not dashed
+        assert 'w:sz="4"' in xml         # eighths of a point -> 0.5 pt
+        assert 'w:color="000000"' in xml

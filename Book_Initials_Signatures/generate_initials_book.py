@@ -73,8 +73,47 @@ NAMED_PAGE_SIZES = {"A4": (21.0, 29.7), "A5": (14.8, 21.0)}
 LONGEST_INITIALS = 5
 CHARACTER_WIDTH_EM = 0.42
 
-# Separators tried when auto-detecting the CSV format
-CSV_SEPARATORS = [",", ";", "\t", "|"]
+# Separators and encodings tried when auto-detecting the CSV format.
+#
+# Separators are ordered least-likely-to-appear-inside-a-name first, and
+# that order is load-bearing for the same reason the encoding order is.
+# Unlike an encoding, a separator cannot fail: several can each split the
+# same file into two columns, and the first one tried wins. Given the row
+#
+#     Иван, Петър<TAB>Иванов
+#
+# a comma yields ('Иван', ' Петър\tИванов') and a tab yields
+# ('Иван, Петър', 'Иванов') - both exactly two columns, so the column
+# count cannot break the tie. Only the characters themselves can:
+#
+#   \t and |   never occur inside a Bulgarian name, so a file that splits
+#              on one of them really is separated by it.
+#   ;          occurs in prose but almost never in a name.
+#   ,          LAST, and it must stay last: it is the one separator that
+#              turns up inside the data itself, in surname-first exports
+#              like "Иванов, Иван". Tried first, it silently wins on
+#              tab-separated files and yields the wrong initials.
+#
+# Quoting the field ("Иван, Петър"<TAB>Иванов) also resolves this, but a
+# CSV that needed quoting and did not get it is exactly the case here.
+#
+# The first encoding that decodes the file wins, so the order is what makes
+# this correct rather than merely successful. An encoding earns a place here
+# only if it can be reached — only if the ones before it fail on the files
+# it is meant to catch:
+#
+#   utf-8    what a modern export should be. Fails loudly on anything else,
+#            and pandas strips the byte-order mark Excel writes, so a
+#            separate utf-8-sig entry would never be reached.
+#   cp1251   Windows Cyrillic — what Excel saves Bulgarian text as. utf-8
+#            rejects those bytes, so this is reachable.
+#   latin-1  LAST RESORT, and it must stay last: it maps every one of the
+#            256 byte values to a character, so it can never fail. Put it
+#            earlier and it swallows the file, turning "Иван" into "Èâàí"
+#            without raising anything at all.
+CSV_SEPARATORS = ["\t", "|", ";", ","]
+CSV_ENCODINGS = ["utf-8", "cp1251", "latin-1"]
+LAST_RESORT_ENCODING = "latin-1"
 
 
 class LayoutError(ValueError):
@@ -271,21 +310,43 @@ class Layout:
 # Step 1 & 2 — from a CSV of names to a list of initials
 # ---------------------------------------------------------------------------
 
+def _try_read_csv(path: str, separator: str, encoding: str) -> pd.DataFrame | None:
+    """Return the names only if they parse into more than one column."""
+    try:
+        names = pd.read_csv(path, header=None, sep=separator, encoding=encoding)
+    except FileNotFoundError:
+        raise  # a missing file is not a parsing problem — report it
+    except Exception:
+        return None
+    if len(names.columns) > 1:
+        return names
+    return None
+
+
 def read_two_column_csv(path: str) -> pd.DataFrame:
-    """Read a CSV, trying common separators until one yields >1 column."""
-    for separator in CSV_SEPARATORS:
-        try:
-            names = pd.read_csv(path, header=None, sep=separator)
-        except FileNotFoundError:
-            raise  # a missing file is not a parsing problem — report it
-        except Exception:
-            continue
-        if len(names.columns) > 1:
-            print(f"  Read '{path}' using separator {separator!r}.")
+    """Read a CSV, trying each encoding and separator until one yields >1 column.
+
+    The first combination that parses wins, so the order of CSV_ENCODINGS is
+    what makes this correct rather than merely successful — see the note
+    beside it.
+    """
+    for encoding in CSV_ENCODINGS:
+        for separator in CSV_SEPARATORS:
+            names = _try_read_csv(path, separator, encoding)
+            if names is None:
+                continue
+            print(f"  Read '{path}' using separator {separator!r} and "
+                  f"encoding '{encoding}'.")
+            if encoding == LAST_RESORT_ENCODING:
+                print(f"  NOTE: '{encoding}' accepts any file at all, so this "
+                      f"is a guess.\n  Check the initials look right — if the "
+                      f"book reads 'È. È.' instead of 'И. И.', re-save the "
+                      f"CSV as UTF-8.")
             return names
+
     raise ValueError(
         f"Could not parse '{path}' into at least two columns. "
-        f"Tried separators: {CSV_SEPARATORS}"
+        f"Tried separators {CSV_SEPARATORS} with encodings {CSV_ENCODINGS}."
     )
 
 
