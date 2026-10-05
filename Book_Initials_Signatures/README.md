@@ -321,8 +321,16 @@ Rendering 20,000 initials with LibreOffice...
 lines on a page           42          42
 pages                     69          69
 
+Font: Bebas Neue Cyrillic — the real one.
+
 OK — +0% against the prediction, within the 10% allowed.
 ```
+
+It also says which font went into the PDF, because a page measured with a
+stand-in font is not the page that gets printed. On Linux it points
+fontconfig at the `bebasneuecyrillic.ttf` in this folder for the length of
+the conversion, so the check works whether or not the font was ever
+installed — nothing is added to your system.
 
 A few percent either way is normal — the programs genuinely differ. A big
 difference fails the check and says what the program really fits:

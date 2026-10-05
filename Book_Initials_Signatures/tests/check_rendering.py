@@ -40,6 +40,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from generate_initials_book import (  # noqa: E402
+    FONT_NAME,
     INPUT_CSV,
     Layout,
     build_initials_document,
@@ -47,6 +48,9 @@ from generate_initials_book import (  # noqa: E402
     names_to_initials,
     read_two_column_csv,
 )
+
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BUNDLED_FONT = os.path.join(HERE, "bebasneuecyrillic.ttf")
 
 DEFAULT_LIMIT = 20_000
 TOLERANCE = 0.10  # a tenth more pages than predicted is still acceptable
@@ -77,12 +81,45 @@ def find_converter() -> tuple[str, str] | None:
     return ("word", "docx2pdf")
 
 
+def font_environment(work_dir: str) -> dict[str, str]:
+    """An environment in which the bundled font is findable.
+
+    On Linux the check should not depend on whether anyone remembered to
+    install the font: a layout measured with a substitute is not the
+    layout that will be printed. fontconfig can be pointed at the copy in
+    this folder for the length of one conversion, without installing
+    anything. Elsewhere this does nothing and the system fonts are used.
+    """
+    environment = dict(os.environ)
+    if not sys.platform.startswith("linux") or not os.path.exists(BUNDLED_FONT):
+        return environment
+
+    config = os.path.join(work_dir, "fonts.conf")
+    with open(config, "w", encoding="utf-8") as handle:
+        handle.write(
+            "<?xml version='1.0'?>\n<fontconfig>\n"
+            "  <include ignore_missing='yes'>/etc/fonts/fonts.conf</include>\n"
+            f"  <dir>{HERE}</dir>\n"
+            f"  <cachedir>{os.path.join(work_dir, 'fontcache')}</cachedir>\n"
+            "</fontconfig>\n"
+        )
+    environment["FONTCONFIG_FILE"] = config
+    return environment
+
+
+def fonts_in_pdf(path: str) -> set[str]:
+    """The font names a PDF actually embeds, without their subset prefixes."""
+    names = re.findall(rb"/BaseFont\s*/([A-Za-z0-9+\-,._]+)", pathlib_read(path))
+    return {name.decode("latin-1").split("+")[-1] for name in names}
+
+
 def convert_to_pdf(kind: str, path: str, docx: str, out_dir: str) -> str:
     """Convert ``docx`` to a PDF in ``out_dir`` and return the PDF's path."""
     if kind == "libreoffice":
         subprocess.run(
             [path, "--headless", "--convert-to", "pdf", "--outdir", out_dir, docx],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            env=font_environment(out_dir),
         )
     else:
         from docx2pdf import convert
@@ -130,6 +167,8 @@ def main() -> int:
     parser.add_argument("--columns", type=int, default=Layout().columns)
     parser.add_argument("--font-size", type=float, default=Layout().font_size_pt)
     parser.add_argument("--margin", type=float, default=Layout().margin_cm)
+    parser.add_argument("--font-name", default=FONT_NAME,
+                        help="Font to set the book in")
     args = parser.parse_args()
 
     converter = find_converter()
@@ -150,9 +189,11 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory() as folder:
         docx = os.path.join(folder, "book.docx")
-        build_initials_document(initials, layout).save(docx)
+        build_initials_document(initials, layout,
+                                font_name=args.font_name).save(docx)
         pdf = convert_to_pdf(kind, path, docx, folder)
         actual_pages = count_pdf_pages(pdf)
+        embedded = fonts_in_pdf(pdf)
 
     predicted_pages = layout.pages_for(len(initials))
 
@@ -178,6 +219,17 @@ def main() -> int:
     print(f"{'':16}{'predicted':>12}{'actual':>12}")
     print(f"{'lines on a page':16}{layout.lines_per_page:>12}{implied:>12}")
     print(f"{'pages':16}{predicted_pages:>12,}{actual_pages:>12,}")
+
+    # A page measured with a stand-in font is not the page that gets
+    # printed, so say which font actually went into the PDF.
+    wanted = args.font_name.replace(" ", "")
+    if any(wanted.lower() == name.lower() for name in embedded):
+        print(f"\nFont: {args.font_name} — the real one.")
+    else:
+        print(f"\nFont: {args.font_name} was NOT used. The PDF contains "
+              f"{', '.join(sorted(embedded)) or 'nothing recognisable'}.")
+        print("The spacing you see measured here is a substitute's, not "
+              "the font the book is set in.")
 
     overshoot = (actual_pages - predicted_pages) / predicted_pages
     print()
