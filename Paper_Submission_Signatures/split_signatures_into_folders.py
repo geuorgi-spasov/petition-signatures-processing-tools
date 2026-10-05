@@ -375,6 +375,7 @@ def main() -> None:
     column_widths = scale_column_widths(len(header))
     print(f"Column widths (cm): {[round(w, 2) for w in column_widths]}")
 
+    # exist_ok: a second run writes into the same folder rather than failing
     os.makedirs(OUTPUT_DOCX_FOLDER, exist_ok=True)
     print(f"Writing output into '{OUTPUT_DOCX_FOLDER}/'.")
 
@@ -383,6 +384,11 @@ def main() -> None:
 
     overall_start = time.perf_counter()
 
+    # One file per folder of signatures. The name carries the range of
+    # database IDs inside it - "Папка 7 с подписи от 6001 до 7000" - so
+    # that a paper folder on a desk can be matched to its document
+    # without opening it. Column 0 is that ID, which is why the first and
+    # last row are read before the document is built.
     for folder_number, folder_rows in enumerate(
             in_blocks_of(df, ROWS_PER_FILE), start=1):
         first_id = str(folder_rows.iloc[0, 0])
@@ -397,6 +403,10 @@ def main() -> None:
         output_path = os.path.join(OUTPUT_DOCX_FOLDER, filename)
         doc.save(output_path)
 
+        # Every folder takes about as long as the last, so the average so
+        # far is a good enough estimate of what is left. This run takes
+        # minutes, and a line that only said "[7/111]" would leave the
+        # person watching it with no idea whether to wait.
         elapsed = time.perf_counter() - overall_start
         avg_per_folder = elapsed / folder_number
         remaining = avg_per_folder * (total_files - folder_number)
