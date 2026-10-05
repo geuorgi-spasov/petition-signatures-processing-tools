@@ -15,6 +15,7 @@ See README.md for the full workflow.
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from collections.abc import Iterator
@@ -335,9 +336,9 @@ def build_folder_document(
     """Build the Word document for a single submission folder (~1000 rows)."""
     doc = create_landscape_document()
 
-    pages_in_file = (len(folder_rows) + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
+    pages_in_file = math.ceil(len(folder_rows) / ROWS_PER_PAGE)
     # Pages in a *full* folder — used so page numbering continues across files
-    pages_per_full_folder = (ROWS_PER_FILE + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
+    pages_per_full_folder = math.ceil(ROWS_PER_FILE / ROWS_PER_PAGE)
 
     for page_num, page_rows in enumerate(
             in_blocks_of(folder_rows, ROWS_PER_PAGE), start=1):
@@ -377,7 +378,7 @@ def main() -> None:
     os.makedirs(OUTPUT_DOCX_FOLDER, exist_ok=True)
     print(f"Writing output into '{OUTPUT_DOCX_FOLDER}/'.")
 
-    total_files = (len(df) + ROWS_PER_FILE - 1) // ROWS_PER_FILE
+    total_files = math.ceil(len(df) / ROWS_PER_FILE)
     print(f"\nCreating {total_files} submission file(s)...\n")
 
     overall_start = time.perf_counter()
