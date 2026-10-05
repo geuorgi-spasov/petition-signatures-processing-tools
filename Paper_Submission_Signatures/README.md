@@ -249,6 +249,50 @@ Done in 42.3s (~0.42s per converted file). Converted: 100, skipped: 0, failed: 0
 
 so you can see exactly how long the run took.
 
+### Checking the real PDF
+
+Unit tests prove the arithmetic is self-consistent. They cannot tell you
+how many rows the renderer really fits on a page — and these documents
+break the page after every tenth signature and print the page number in
+the footer, so if the renderer disagrees the breaks land wrong and every
+footer is wrong with them. That is exactly what happened when the page
+moved from US Letter to A4: a 100-page folder rendered as 199 while the
+script still reported 100.
+
+`tests/check_rendering.py` builds a folder, converts it with whatever
+program is installed, and compares:
+
+```
+python tests/check_rendering.py --rows 200
+```
+
+```
+                      declared    actual
+pages                       20        20
+signatures a page           10      10.0
+
+Fonts: Arial and Cambria not available here — the PDF contains
+Caladea-Italic, LiberationSans, LiberationSans-Bold, NotoSerif-Italic.
+
+OK — 20 pages, exactly as declared, with 10 signatures on each.
+```
+
+Unlike the book of initials, whose page count is an estimate, these two
+numbers **must match exactly** — the page numbers are printed into the
+document. A mismatch fails the check and says what to change:
+
+```
+FAILED — the document says 20 pages and renders as 39.
+The page breaks are in the wrong place, so the page numbers printed in
+the footers are wrong too.
+```
+
+It also reports which fonts went into the PDF. On Linux, Arial and
+Cambria are usually absent and LibreOffice substitutes Liberation Sans
+and Caladea — the same character widths, so the layout holds, but the
+letters are drawn differently. Add `--word` or `--libreoffice` to check a
+particular program.
+
 ### Measuring it yourself
 
 `benchmark_conversion.py` runs both strategies (per-file vs batch) on
@@ -363,6 +407,7 @@ Paper_Submission_Signatures/
 │   ├── conftest.py
 │   ├── test_requirements.txt               (extras for running tests)
 │   ├── benchmark_conversion.py             (optional, for measuring speed)
+│   ├── check_rendering.py                  (real PDF vs what was declared)
 │   ├── test_split_signatures.py
 │   └── test_convert_docx_to_pdf.py
 ├── Signatures_from_the_database_raw.csv    (your input)
