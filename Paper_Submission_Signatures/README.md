@@ -345,12 +345,12 @@ A successful run looks like:
 
 ```
 ======================== test session starts ========================
-collected 35 items
+collected 52 items
 
 tests/test_convert_docx_to_pdf.py ........................         [ 68%]
 tests/test_split_signatures.py ...........                       [100%]
 
-======================== 35 passed in 6.3s ==========================
+======================== 52 passed in 4.8s ==========================
 ```
 
 ---

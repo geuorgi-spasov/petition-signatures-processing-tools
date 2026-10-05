@@ -67,9 +67,31 @@ ORGANIZATION_NAME = 'Сдружение „Невидими животни"'
 # available page width.
 DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 
-# Encodings and separators tried when auto-detecting the CSV format
+# Separators and encodings tried when auto-detecting the CSV format.
+#
+# The first encoding that decodes the file wins, so the order is what makes
+# this correct rather than merely successful. An encoding earns a place here
+# only if it can be reached - that is, only if the ones before it fail on
+# the files it is meant to catch:
+#
+#   utf-8    what a modern export should be. Fails loudly on anything else,
+#            and pandas strips the byte-order mark Excel writes, so a
+#            separate utf-8-sig entry would never be reached.
+#   cp1251   Windows Cyrillic - what Excel saves Bulgarian text as. utf-8
+#            rejects those bytes, so this is reachable.
+#   latin-1  LAST RESORT, and it must stay last: it maps every one of the
+#            256 byte values to a character, so it can never fail. Put it
+#            earlier and it swallows the file, turning "Иван" into "Èâàí"
+#            without raising anything at all.
+#
+# Deliberately absent: cp866 (DOS Cyrillic) decodes the same bytes as
+# cp1251 without error, so after cp1251 it could never be reached - listing
+# it would only suggest a coverage that is not there. The same goes for
+# cp1252 and iso-8859-1, which latin-1 shadows completely (iso-8859-1 is
+# not even a different codec - Python resolves both names to the same one).
 CSV_SEPARATORS = [",", ";", "\t", "|"]
-CSV_ENCODINGS = ["utf-8", "latin-1", "cp1252", "iso-8859-1"]
+CSV_ENCODINGS = ["utf-8", "cp1251", "latin-1"]
+LAST_RESORT_ENCODING = "latin-1"
 
 
 # ---------------------------------------------------------------------------
@@ -99,33 +121,30 @@ def _try_read_csv(path: str, sep: str, encoding: str = "utf-8") -> pd.DataFrame 
 
 
 def read_signatures_csv(path: str) -> pd.DataFrame:
-    """Read the raw CSV, trying common separators and encodings."""
-    # 1) Try standard separators with utf-8
-    for sep in CSV_SEPARATORS:
-        df = _try_read_csv(path, sep)
-        if df is not None:
-            print(f"Read '{path}' using separator {sep!r} and utf-8.")
-            return df
+    """Read the raw CSV, trying each encoding and separator in turn.
 
-    # 2) Pick the most common separator on the first line
-    with open(path, "r", encoding="utf-8") as fh:
-        first_line = fh.readline().strip()
-    best_sep = max(CSV_SEPARATORS, key=first_line.count)
-    if first_line.count(best_sep) > 0:
-        df = _try_read_csv(path, best_sep)
-        if df is not None:
-            print(f"Read '{path}' using detected separator {best_sep!r}.")
-            return df
-
-    # 3) Fall back to alternative encodings
+    The first combination that yields more than one column wins, so the
+    order of CSV_ENCODINGS is what makes this correct rather than merely
+    successful - see the note beside it.
+    """
     for encoding in CSV_ENCODINGS:
         for sep in CSV_SEPARATORS:
             df = _try_read_csv(path, sep, encoding)
-            if df is not None:
-                print(f"Read '{path}' using {sep!r} and encoding '{encoding}'.")
-                return df
+            if df is None:
+                continue
+            print(f"Read '{path}' using separator {sep!r} and "
+                  f"encoding '{encoding}'.")
+            if encoding == LAST_RESORT_ENCODING:
+                print(f"  NOTE: '{encoding}' accepts any file at all, so this "
+                      f"is a guess.\n  Check the names below look right - if "
+                      f"they read like 'Èâàí' instead of 'Иван', re-save the "
+                      f"CSV as UTF-8.")
+            return df
 
-    raise ValueError(f"Could not parse '{path}' as a multi-column CSV.")
+    raise ValueError(
+        f"Could not parse '{path}' as a multi-column CSV.\n"
+        f"Tried separators {CSV_SEPARATORS} with encodings {CSV_ENCODINGS}."
+    )
 
 
 # ---------------------------------------------------------------------------
