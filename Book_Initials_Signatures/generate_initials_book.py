@@ -87,6 +87,21 @@ PAGE_SIZE_TOLERANCE_CM = 0.05
 LONGEST_INITIALS = 5
 CHARACTER_WIDTH_EM = 0.545
 
+# The initials come from the first two columns by position, so the wrong
+# file produces a wrong book that looks right. These are the shares at
+# which a column stops being odd and starts being the wrong column.
+#
+# Individual oddities have to survive: the export holds names beginning
+# with a digit, and one value containing an '@' ('@milyanov'), so a single
+# occurrence proves nothing. Measured over the 110,942 rows, neither name
+# column has a single fully numeric value and 0.0009% hold an '@', so both
+# thresholds clear the real file by a wide margin.
+#
+# Numbers get the looser share because a numeric column read with
+# header=None still carries its header word as one non-numeric value.
+NUMERIC_COLUMN_SHARE = 0.9
+EMAIL_COLUMN_SHARE = 0.5
+
 # Separators and encodings tried when auto-detecting the CSV format.
 #
 # Separators are ordered least-likely-to-appear-inside-a-field first.
@@ -131,6 +146,10 @@ def _about(measured_cm: float, named_cm: float) -> bool:
 
 class LayoutError(ValueError):
     """Raised when a layout cannot be printed on the chosen page size."""
+
+
+class NameColumnError(ValueError):
+    """Raised when the first two columns cannot be columns of names."""
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +342,80 @@ class Layout:
 # Step 1 & 2 — from a CSV of names to a list of initials
 # ---------------------------------------------------------------------------
 
+def _as_text(value) -> str:
+    """A cell as stripped text, with a missing value as an empty string."""
+    return "" if pd.isna(value) else str(value).strip()
+
+
+def _filled_values(column: pd.Series) -> pd.Series:
+    """The column as stripped text, with the blanks dropped."""
+    text = column.dropna().astype(str).str.strip()
+    return text[text != ""]
+
+
+def _share_numeric(column: pd.Series) -> float:
+    """The share of a column's filled values that are plain numbers."""
+    text = _filled_values(column)
+    if text.empty:
+        return 0.0
+    return float(text.str.fullmatch(r"-?\d+(\.\d+)?").mean())
+
+
+def _share_with_an_at_sign(column: pd.Series) -> float:
+    """The share of a column's filled values that look like addresses."""
+    text = _filled_values(column)
+    if text.empty:
+        return 0.0
+    return float(text.str.contains("@", regex=False).mean())
+
+
+def check_name_columns(names: pd.DataFrame) -> None:
+    """Refuse the two column shapes that cannot be names.
+
+    Nothing else does: the initials are taken from columns 1 and 2 by
+    position, so pointing the book at the wrong CSV gives 441 pages of
+    '1. С.', '2. А.' and a row count close enough to the real one to pass
+    a glance. This does not judge individual values - a name beginning
+    with a digit or an '@' is in the export and belongs in the book - only
+    whole columns.
+    """
+    for position in (0, 1):
+        column = names.iloc[:, position]
+        human = position + 1
+
+        if _share_numeric(column) > NUMERIC_COLUMN_SHARE:
+            raise NameColumnError(
+                f"Column {human} is numbers, not names, so the initials "
+                f"would come out as '1.', '2.', '3.'. The book wants a CSV "
+                f"whose first two columns are the first and the last name, "
+                f"with no header row and no id column in front of them."
+            )
+
+        if _share_with_an_at_sign(column) > EMAIL_COLUMN_SHARE:
+            raise NameColumnError(
+                f"Column {human} is email addresses, not names, so every "
+                f"initial would be the first letter of an address. The book "
+                f"wants a CSV whose first two columns are the first and the "
+                f"last name."
+            )
+
+
+def describe_name_columns(names: pd.DataFrame) -> str:
+    """Say which columns became the initials, and show one row doing it."""
+    total = len(names.columns)
+    heading = f"  Taking initials from the first 2 of {total} column(s)."
+
+    for position in range(len(names)):
+        row = names.iloc[[position]]
+        initials = names_to_initials(row)
+        if initials:
+            first = _as_text(row.iloc[0, 0])
+            last = _as_text(row.iloc[0, 1])
+            return (f"{heading}\n"
+                    f"    {first!r} + {last!r} -> {initials[0]!r}")
+    return heading
+
+
 def _try_read_csv(path: str, separator: str, encoding: str) -> pd.DataFrame | None:
     """Return the names only if they parse into at least two columns."""
     try:
@@ -350,6 +443,10 @@ def read_names_csv(path: str) -> pd.DataFrame:
                 continue
             print(f"  Read '{path}' using separator {separator!r} and "
                   f"encoding '{encoding}'.")
+            # Before anything is built: refuse the column shapes that
+            # cannot be names, then show what the rest became.
+            check_name_columns(names)
+            print(describe_name_columns(names))
             if encoding == LAST_RESORT_ENCODING:
                 print(f"  NOTE: '{encoding}' accepts any file at all, so this "
                       f"is a guess.\n  Check the initials look right — if the "

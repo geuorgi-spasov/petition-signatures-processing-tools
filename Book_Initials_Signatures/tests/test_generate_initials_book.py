@@ -16,6 +16,9 @@ from generate_initials_book import (
     CSV_SEPARATORS,
     Layout,
     LayoutError,
+    NameColumnError,
+    check_name_columns,
+    describe_name_columns,
     build_initials_document,
     group_into_lines,
     main,
@@ -435,6 +438,103 @@ class TestEncodings:
             read_names_csv(str(path))
         assert "Tried separators" in str(error.value)
         assert "cp1251" in str(error.value)
+
+
+# ---------------------------------------------------------------------------
+# Which columns are the names
+# ---------------------------------------------------------------------------
+
+class TestNameColumns:
+    """The initials are taken from columns 1 and 2 by position.
+
+    Nothing used to check that those columns held names, so the wrong CSV
+    produced a 441-page book of row numbers and reported success. These
+    cover the shapes that cannot be names, and - just as important - the
+    odd values that must still be allowed through.
+    """
+
+    def _read(self, tmp_path, text):
+        csv = tmp_path / "names.csv"
+        csv.write_text(text, encoding="utf-8")
+        return read_names_csv(str(csv))
+
+    def test_two_columns_of_names_are_accepted(self, tmp_path):
+        names = self._read(tmp_path, "Светла\tДраганов\nАна\tАлександров\n")
+        assert names_to_initials(names) == ["С. Д.", "А. А."]
+
+    def test_an_id_column_in_front_is_refused(self, tmp_path):
+        with pytest.raises(NameColumnError) as error:
+            self._read(tmp_path, "1\tСветла\tДраганов\n2\tАна\tАлександров\n")
+        assert "Column 1 is numbers, not names" in str(error.value)
+
+    def test_an_email_column_in_front_is_refused(self, tmp_path):
+        with pytest.raises(NameColumnError) as error:
+            self._read(tmp_path, "a@example.com\tСветла\tДраганов\n"
+                                 "b@example.com\tАна\tАлександров\n")
+        assert "Column 1 is email addresses, not names" in str(error.value)
+
+    def test_an_email_column_second_is_refused_too(self, tmp_path):
+        with pytest.raises(NameColumnError) as error:
+            self._read(tmp_path, "Светла\ta@example.com\nАна\tb@example.com\n")
+        assert "Column 2 is email addresses" in str(error.value)
+
+    def test_a_numbers_column_keeps_its_header_and_is_still_refused(self, tmp_path):
+        # read_csv is given header=None, so a numeric column arrives with
+        # its header word as one non-numeric value among thousands. That
+        # is why the share is 0.9 and not 1.0 - this is the shape the
+        # paper toolkit's own export has.
+        rows = "".join(f"{i}\tИван\tИванов\n" for i in range(1, 40))
+        with pytest.raises(NameColumnError):
+            self._read(tmp_path, "Номер\tИме\tФамилия\n" + rows)
+
+    # The guards look at whole columns, never at single values: these are
+    # in the export and have to reach the book as they are.
+    @pytest.mark.parametrize("odd", ["@milyanov", "2milyanov", "?milyanov", "2"])
+    def test_one_odd_value_does_not_make_a_column_the_wrong_column(
+        self, tmp_path, odd
+    ):
+        rows = "".join(f"Иван{i}\tИванов\n" for i in range(30))
+        names = self._read(tmp_path, f"{odd}\tИванов\n" + rows)
+        assert names_to_initials(names)[0] == f"{odd[0].upper()}. И."
+
+    def test_a_column_of_names_passes_the_check(self):
+        names = pd.DataFrame([["Иван", "Иванов"], ["Мария", "Маринова"]])
+        check_name_columns(names)  # must not raise
+
+    def test_the_description_names_the_columns_and_shows_a_row(self):
+        names = pd.DataFrame([["Светла", "Драганов"]])
+        description = describe_name_columns(names)
+        assert "first 2 of 2 column(s)" in description
+        assert "'Светла' + 'Драганов' -> 'С. Д.'" in description
+
+    def test_the_description_counts_the_columns_it_ignores(self):
+        names = pd.DataFrame([["Светла", "Драганов", "София", "2024-01-01"]])
+        assert "first 2 of 4 column(s)" in describe_name_columns(names)
+
+    def test_the_description_skips_rows_that_hold_no_name(self):
+        names = pd.DataFrame([[None, None], ["Светла", "Драганов"]])
+        assert "'Светла' + 'Драганов' -> 'С. Д.'" in describe_name_columns(names)
+
+    def test_a_header_row_is_not_refused_but_is_shown(self, tmp_path):
+        # No honest check separates a header from a one-row name file, so
+        # this is what the printed line is for: 'И. Ф.' is visibly not a
+        # signatory, and it appears before 441 pages are built.
+        names = self._read(tmp_path, "Име\tФамилия\nСветла\tДраганов\n")
+        assert "'Име' + 'Фамилия' -> 'И. Ф.'" in describe_name_columns(names)
+
+
+class TestMainRefusesTheWrongColumns:
+    def test_the_wrong_columns_are_reported_and_nothing_is_written(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "wrong.csv").write_text(
+            "1\tСветла\tДраганов\n2\tАна\tАлександров\n", encoding="utf-8"
+        )
+        code = main(["--input", "wrong.csv", "--output", "out.docx"])
+        assert code == 1
+        assert not (tmp_path / "out.docx").exists()
+        assert "numbers, not names" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
