@@ -37,10 +37,8 @@ Follow **one** of the two paths below — whichever matches your computer.
 
 1. **Install Python** from <https://www.python.org/downloads/>, ticking
    *"Add Python to PATH"* during the installation.
-2. **Install the font:** double-click `oswald.ttf` in this
-   folder and press *Install*.
-3. **Put your `book_signatures_only_names.csv` in this folder.**
-4. **Double-click `run-windows.bat`.**
+2. **Put your `book_signatures_only_names.csv` in this folder.**
+3. **Double-click `run-windows.bat`.**
 
 ### Linux and macOS
 
@@ -50,22 +48,35 @@ Follow **one** of the two paths below — whichever matches your computer.
    sudo apt install python3 python3-venv
    ```
 
-2. **Install the font:**
-
-   ```
-   mkdir -p ~/.local/share/fonts && cp oswald.ttf ~/.local/share/fonts/ && fc-cache -f
-   ```
-
-3. **Put your `book_signatures_only_names.csv` in this folder.**
-4. **Open Terminal in this folder and run:**
+2. **Put your `book_signatures_only_names.csv` in this folder.**
+3. **Open Terminal in this folder and run:**
 
    ```
    ./run-linux-macos.sh
    ```
 
-That's it. The launcher installs what the script needs and then
-builds the book. The first run takes an extra minute to set itself up;
-after that it's about 15 seconds for ~111,000 names.
+That's it. The launcher sets up everything the script needs, offers to
+install the font the first time, and then builds the book. The first run
+takes an extra minute to set itself up; after that it's about 15 seconds
+for ~111,000 names.
+
+The font prompt looks like this, and pressing Enter accepts:
+
+```
+The book is set in Oswald, which is not installed yet.
+The font is bundled here and free to install (SIL Open Font
+License, see OFL.txt). It goes in your own home folder:
+    /home/you/.local/share/fonts/oswald.ttf
+
+Install it now? [Y/n]
+```
+
+Nothing is installed outside your own user account, and no
+administrator or root rights are needed. If you would rather do it
+yourself, answer `n` and see [Installing the font](#installing-the-font)
+below — the book is still built either way, but whatever opens it will
+substitute a different font and the spacing will not be what the layout
+intends.
 
 To see the layout and the page count *without* writing anything, add
 `--dry-run` — `run-windows.bat --dry-run` or `./run-linux-macos.sh --dry-run`.
@@ -98,8 +109,15 @@ to whichever program prints it, and they differ a little.
 
 ## Installing the font
 
-The font file `oswald.ttf` is bundled in this folder. After
-installing, it registers itself on your system as **`Oswald`** — that is the exact name the script looks for.
+**You normally do not have to do this** — the launcher offers to install
+the font on the first run, for your user only. This section is for doing
+it by hand, or for checking what the launcher did.
+
+The font file `oswald.ttf` is bundled in this folder and is licensed
+under the SIL Open Font License (`OFL.txt`), which is what makes it
+free to pass around with the program. After installing, it registers
+itself on your system as **`Oswald`** — the exact name the script looks
+for.
 
 ### Windows
 
