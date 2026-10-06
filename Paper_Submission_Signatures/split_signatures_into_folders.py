@@ -55,13 +55,29 @@ RIGHT_MARGIN_CM = 2.0
 TOP_MARGIN_CM = 1.5
 BOTTOM_MARGIN_CM = 2.0
 
-# How much height the footer takes off every page. Measured, not derived:
-# the footer is a blank line and two 12 pt italic lines, and what actually
-# fits is settled by the renderer, not by adding those up. Ten rows a page
-# is the most that renders as declared; eleven does not. Re-measure with
-# `python tests/check_rendering.py --rows-per-page N` if the row height,
-# the footer or the offsets change.
-FOOTER_BLOCK_CM = 2.0
+# The footer's height, derived. Every line of it is pinned below - its
+# line spacing and the space around it are set explicitly - so this is
+# arithmetic rather than a renderer's preference.
+#
+# It was a measurement before, taken under LibreOffice, and that was the
+# bug: the table was pinned to the millimetre with EXACTLY row heights
+# while the footer's spacing was left unset, so the renderer chose it.
+# LibreOffice chose small enough to fit. Word chose larger, the footer
+# moved to a page of its own, and a 100-page folder came out at 199 -
+# the same failure the US Letter to A4 change caused, from the other end.
+#
+# Three lines: the two the footer prints, and the paragraph that carries
+# the page break, whose own line box sits on the page before the break.
+POINTS_PER_CM = 72 / 2.54   # a point is 1/72 inch, an inch is 2.54 cm
+
+FOOTER_LINES = 3
+FOOTER_LINE_SPACING = 1.2
+FOOTER_SPACE_BEFORE_PT = 6   # the gap the blank line used to provide
+
+# Renderers round, and a page that fits to the last fraction of a
+# millimetre in one will not in another. This is the room left over on
+# purpose so that being slightly wrong is not being broken.
+PAGE_SAFETY_MARGIN_CM = 0.3
 
 # Row layout
 ROW_HEIGHT_CM = 1.3
@@ -137,23 +153,25 @@ def in_blocks_of(rows: pd.DataFrame, size: int) -> Iterator[pd.DataFrame]:
         yield rows.iloc[start:start + size]
 
 
+def footer_block_cm() -> float:
+    """The height the footer and the page break take off every page."""
+    points = (FOOTER_SPACE_BEFORE_PT
+              + FOOTER_LINES * FOOTER_FONT_SIZE_PT * FOOTER_LINE_SPACING)
+    return points / POINTS_PER_CM
+
+
 def max_rows_per_page() -> int:
     """How many data rows fit between the top and bottom offsets.
 
     One row is ROW_HEIGHT_CM high and the header row takes one more, so
-    this is the usable height - less what the footer takes - divided by
-    the row height, less that header. It is the same arithmetic the page
-    breaks rely on: if more rows are asked for than this, the table runs
-    off the page and the declared page count stops matching the rendered
-    one.
-
-    The footer term was missing until tests/check_rendering.py was given
-    --rows-per-page and could finally render the thing. Without it this
-    returned 12, and at 11 and 12 rows a page a document declaring 6
-    pages came out as 11. The shipped default of 10 was never affected.
+    this is the usable height - less the footer, less the room left over
+    on purpose - divided by the row height, less that header. It is the
+    same arithmetic the page breaks rely on: if more rows are asked for
+    than this, the table runs off the page and the declared page count
+    stops matching the rendered one.
     """
     usable_cm = (PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
-                 - FOOTER_BLOCK_CM)
+                 - footer_block_cm() - PAGE_SAFETY_MARGIN_CM)
     return int(usable_cm // ROW_HEIGHT_CM) - 1
 
 
@@ -338,13 +356,29 @@ def add_page_table(
     apply_full_table_borders(table)
 
 
+def pin_footer_spacing(paragraph) -> None:
+    """Fix a footer paragraph's height so no renderer can choose it."""
+    spacing = paragraph.paragraph_format
+    spacing.space_before = Pt(0)
+    spacing.space_after = Pt(0)
+    spacing.line_spacing = Pt(FOOTER_FONT_SIZE_PT * FOOTER_LINE_SPACING)
+
+
 def add_page_footer(
     doc: DocumentType, global_page_number: int, folder_number: int
 ) -> None:
-    """Write the per-page footer: blank line, page/folder info, org name."""
+    """Write the per-page footer: page/folder info, then the org name.
+
+    Its spacing is set here rather than left to the renderer. The table
+    above it has EXACTLY row heights, so its height is the same
+    everywhere; a footer whose line spacing came from whatever opened the
+    document made the page as a whole renderer-dependent, and the page
+    count is a promise printed in this very footer.
+    """
     footer = doc.add_paragraph()
     footer.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    footer.add_run().add_break()  # blank line before the footer
+    pin_footer_spacing(footer)
+    footer.paragraph_format.space_before = Pt(FOOTER_SPACE_BEFORE_PT)
 
     info_run = footer.add_run(
         f"Стр. {global_page_number}, папка {folder_number}"
@@ -383,7 +417,9 @@ def build_folder_document(
         add_page_footer(doc, global_page, folder_number)
 
         if page_num < pages_in_file:
-            doc.add_page_break()
+            # Its own paragraph, whose line box sits on the page it ends,
+            # so it is counted in footer_block_cm() and pinned like the rest.
+            pin_footer_spacing(doc.add_page_break())
 
     return doc, pages_in_file
 
