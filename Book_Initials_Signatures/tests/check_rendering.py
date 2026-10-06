@@ -69,6 +69,23 @@ def say(message: str) -> None:
     print(message, flush=True)
 
 
+# Where the Windows installer puts Word. Path components, not one
+# "a/b/c" string: os.path.join leaves the inside of a string alone, so a
+# single-string pattern comes back from Windows with both separators
+# mixed into it.
+WORD_PATTERNS = (
+    ("Microsoft Office", "root", "Office*", "WINWORD.EXE"),
+    ("Microsoft Office", "Office*", "WINWORD.EXE"),
+)
+
+
+def program_files_dirs() -> list[str]:
+    """The Program Files folders, 64-bit and 32-bit, that exist."""
+    named = (os.environ.get("ProgramFiles", r"C:\Program Files"),
+             os.environ.get("ProgramFiles(x86)", ""))
+    return [directory for directory in named if directory]
+
+
 def find_libreoffice() -> str | None:
     """Return the path to the LibreOffice CLI, or None."""
     for name in ("libreoffice", "soffice"):
@@ -77,25 +94,47 @@ def find_libreoffice() -> str | None:
             return path
 
     candidates = ["/Applications/LibreOffice.app/Contents/MacOS/soffice"]
-    for directory in (os.environ.get("ProgramFiles", r"C:\Program Files"),
-                      os.environ.get("ProgramFiles(x86)", "")):
-        if directory:
-            candidates.append(
-                os.path.join(directory, "LibreOffice", "program", "soffice.exe")
-            )
+    candidates += [
+        os.path.join(directory, "LibreOffice", "program", "soffice.exe")
+        for directory in program_files_dirs()
+    ]
     for candidate in candidates:
         if os.path.exists(candidate):
             return candidate
     return None
 
 
-def find_word() -> str | None:
-    """Return ``"docx2pdf"`` if the package that drives Word is installed."""
+def docx2pdf_installed() -> bool:
+    """Whether the package that drives Word is importable."""
     try:
         import docx2pdf  # noqa: F401
     except ImportError:
+        return False
+    return True
+
+
+def find_word() -> str | None:
+    """Return the path to the installed Microsoft Word, or None.
+
+    The package that drives Word is not Word. docx2pdf installs happily
+    on any Windows machine, so checking only for the import reported that
+    Word had been found and then failed at conversion time - on the one
+    machine --word exists for. Only the desktop application counts:
+    docx2pdf automates it, so a Microsoft 365 subscription used through
+    office.com in a browser cannot be measured.
+    """
+    if sys.platform == "darwin":
+        app = "/Applications/Microsoft Word.app"
+        return app if os.path.exists(app) else None
+    if not sys.platform.startswith("win"):
         return None
-    return "docx2pdf"
+
+    for directory in program_files_dirs():
+        for parts in WORD_PATTERNS:
+            matches = glob.glob(os.path.join(directory, *parts))
+            if matches:
+                return os.path.normpath(matches[0])
+    return shutil.which("winword")
 
 
 def find_converter(prefer: str | None = None) -> tuple[str, str] | None:
@@ -114,7 +153,7 @@ def find_converter(prefer: str | None = None) -> tuple[str, str] | None:
     """
     if prefer == "word":
         path = find_word()
-        return ("word", path) if path else None
+        return ("word", path) if path and docx2pdf_installed() else None
     if prefer == "libreoffice":
         path = find_libreoffice()
         return ("libreoffice", path) if path else None
@@ -123,7 +162,7 @@ def find_converter(prefer: str | None = None) -> tuple[str, str] | None:
     if path:
         return ("libreoffice", path)
     path = find_word()
-    return ("word", path) if path else None
+    return ("word", path) if path and docx2pdf_installed() else None
 
 
 def font_environment(work_dir: str) -> dict[str, str]:
@@ -242,9 +281,19 @@ def main() -> int:
     converter = find_converter(args.prefer)
     if converter is None:
         if args.prefer == "word":
-            say("--word was asked for, but the 'docx2pdf' package that "
-                "drives Word is not installed:")
-            say("    pip install -r tests/test_requirements.txt")
+            if not docx2pdf_installed():
+                say("--word was asked for, but the 'docx2pdf' package that "
+                    "drives Word is not installed:")
+                say("    pip install -r tests/test_requirements.txt")
+            else:
+                say("--word was asked for, but Microsoft Word is not "
+                    "installed on this machine.")
+                say("docx2pdf can only drive the desktop application - a "
+                    "Microsoft 365 subscription")
+                say("used through office.com in a browser cannot be "
+                    "measured. Install LibreOffice")
+                say("and use --libreoffice, or leave both off to measure "
+                    "whichever is there.")
             return 1
         if args.prefer == "libreoffice":
             say("--libreoffice was asked for, but LibreOffice was not found.")
