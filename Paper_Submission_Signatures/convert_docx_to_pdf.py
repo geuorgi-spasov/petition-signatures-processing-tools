@@ -141,12 +141,11 @@ def _find_word() -> str | None:
     if not sys.platform.startswith("win"):
         return None
 
-    # Written as separate path components, not as one "a/b/c" string:
-    # os.path.join would keep those forward slashes on Windows and hand
-    # back a mixed path like "...\Microsoft Office/root\Office16\
-    # WINWORD.EXE". glob still matches it, so Word is found
-    # either way - but the path is then compared and printed, and a path
-    # that cannot be compared to the same path is a bug waiting to happen.
+    # Path components, not one "a/b/c" string. os.path.join leaves the
+    # inside of a string alone, so the old single-string patterns came
+    # back from Windows as "...\Microsoft Office/root\Office16\
+    # WINWORD.EXE" - glob found Word, but the path did not equal the same
+    # path spelled natively, which is what failed the test for it.
     for directory in _program_files_dirs():
         for parts in WORD_PATTERNS:
             matches = glob.glob(os.path.join(directory, *parts))
