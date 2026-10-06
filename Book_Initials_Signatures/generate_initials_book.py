@@ -3,7 +3,7 @@ Generates a printable book of signatory initials from a CSV of names.
 
 The workflow is three steps:
 
-    1. read the CSV of names          -> read_two_column_csv()
+    1. read the CSV of names          -> read_names_csv()
     2. turn the names into initials    -> names_to_initials()
     3. lay the initials out on the page -> Layout + build_initials_document()
 
@@ -91,7 +91,7 @@ CHARACTER_WIDTH_EM = 0.545
 #
 # Separators are ordered least-likely-to-appear-inside-a-field first.
 # A separator cannot fail the way an encoding can: if a field holds the
-# character being tried, that split also yields more than one column and
+# character being tried, that split also yields at least two columns and
 # wins, silently, and the column count cannot tell the two splits apart.
 #
 # The order is a judgement, not a measurement. None of the four appears
@@ -99,8 +99,9 @@ CHARACTER_WIDTH_EM = 0.545
 # and cannot rank them. What that sample does show is that fields are
 # not clean - '?', '.', '-', digits, an apostrophe, an ellipsis, '%',
 # ':' and '@' all turn up inside names - so none of these is a "never".
-# A pipe is merely the least plausible of the four, then a semicolon,
-# then a tab, and a comma by far the most likely, so it is tried last.
+# A tab is the least plausible of the four: unlike the others it is not
+# a character anyone types in the middle of a word. Then a pipe, then a
+# semicolon, and a comma by far the most likely, so it is tried last.
 #
 # The first encoding that decodes the file wins, so the order is what makes
 # this correct rather than merely successful. An encoding earns a place here
@@ -118,7 +119,7 @@ CHARACTER_WIDTH_EM = 0.545
 #            256 byte values to a character, so it can never fail. Put it
 #            earlier and it swallows the file, turning "Иван" into "Èâàí"
 #            without raising anything at all.
-CSV_SEPARATORS = ["|", ";", "\t", ","]
+CSV_SEPARATORS = ["\t", "|", ";", ","]
 CSV_ENCODINGS = ["utf-8", "cp1251", "latin-1"]
 LAST_RESORT_ENCODING = "latin-1"
 
@@ -323,7 +324,7 @@ class Layout:
 # ---------------------------------------------------------------------------
 
 def _try_read_csv(path: str, separator: str, encoding: str) -> pd.DataFrame | None:
-    """Return the names only if they parse into more than one column."""
+    """Return the names only if they parse into at least two columns."""
     try:
         names = pd.read_csv(path, header=None, sep=separator, encoding=encoding)
     except FileNotFoundError:
@@ -335,8 +336,8 @@ def _try_read_csv(path: str, separator: str, encoding: str) -> pd.DataFrame | No
     return None
 
 
-def read_two_column_csv(path: str) -> pd.DataFrame:
-    """Read a CSV, trying each encoding and separator until one yields >1 column.
+def read_names_csv(path: str) -> pd.DataFrame:
+    """Read a CSV, trying encodings and separators for at least two columns.
 
     The first combination that parses wins, so the order of CSV_ENCODINGS is
     what makes this correct rather than merely successful — see the note
@@ -508,7 +509,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Reading '{args.input}'...")
     try:
-        names = read_two_column_csv(args.input)
+        names = read_names_csv(args.input)
         layout = layout_from_args(args)
         layout.validate()
     except FileNotFoundError:

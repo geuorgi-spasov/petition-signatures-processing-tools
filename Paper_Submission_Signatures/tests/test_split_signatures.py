@@ -243,9 +243,29 @@ class TestSeparators:
         df = read_signatures_csv(str(path))
         assert list(df.columns) == ["Номер", "Име"]
 
-    def test_the_comma_is_tried_last(self):
-        # A separator cannot fail the way an encoding can, so the one most
-        # likely to appear inside a field has to be tried last.
+    @pytest.mark.parametrize("inside", [";", "|"])
+    def test_a_separator_inside_a_field_does_not_beat_the_tab(
+        self, tmp_path, inside
+    ):
+        # Both splits give the same number of columns, so no count can
+        # choose between them and the order is what decides. Splitting on
+        # the ';' here would shift every field one column left.
+        path = tmp_path / "signatures.csv"
+        path.write_text(
+            f"Номер\tИме\tБележка\n"
+            f"1\tИван Иванов\tпърва{inside}втора\n"
+            f"2\tМария Маринова\tтрета{inside}четвърта\n",
+            encoding="utf-8",
+        )
+        df = read_signatures_csv(str(path))
+        assert list(df.columns) == ["Номер", "Име", "Бележка"]
+        assert df.iloc[0]["Бележка"] == f"първа{inside}втора"
+
+    def test_the_tab_is_tried_first_and_the_comma_last(self):
+        # A separator cannot fail the way an encoding can, so the order is
+        # the only guard: least likely inside a field first, most likely
+        # last. A tab is not a character anyone types mid-word; a comma is.
+        assert CSV_SEPARATORS[0] == "\t"
         assert CSV_SEPARATORS[-1] == ","
         assert set(CSV_SEPARATORS) == {"\t", "|", ";", ","}
 

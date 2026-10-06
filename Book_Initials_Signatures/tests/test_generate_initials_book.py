@@ -20,7 +20,7 @@ from generate_initials_book import (
     group_into_lines,
     main,
     names_to_initials,
-    read_two_column_csv,
+    read_names_csv,
 )
 
 # The defaults on A5: 1.5 cm offsets leave 11.8 × 18.0 cm. At 10 pt and
@@ -45,18 +45,18 @@ class TestReadTwoColumnCsv:
     def test_detects_the_common_separators(self, tmp_path, separator):
         csv = tmp_path / "names.csv"
         csv.write_text(f"Иван{separator}Иванов\n", encoding="utf-8")
-        names = read_two_column_csv(str(csv))
+        names = read_names_csv(str(csv))
         assert (names.iloc[0, 0], names.iloc[0, 1]) == ("Иван", "Иванов")
 
     def test_raises_on_a_single_column_file(self, tmp_path):
         csv = tmp_path / "broken.csv"
         csv.write_text("just_one_column\n", encoding="utf-8")
         with pytest.raises(ValueError):
-            read_two_column_csv(str(csv))
+            read_names_csv(str(csv))
 
     def test_raises_on_a_missing_file(self, tmp_path):
         with pytest.raises(FileNotFoundError):
-            read_two_column_csv(str(tmp_path / "does_not_exist.csv"))
+            read_names_csv(str(tmp_path / "does_not_exist.csv"))
 
 
 # ---------------------------------------------------------------------------
@@ -394,7 +394,7 @@ class TestEncodings:
     @pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig", "cp1251"])
     def test_bulgarian_names_survive_the_round_trip(self, tmp_path, encoding):
         path = _write(tmp_path / "names.csv", BULGARIAN_ROWS, encoding)
-        names = read_two_column_csv(path)
+        names = read_names_csv(path)
         assert (names.iloc[0, 0], names.iloc[0, 1]) == ("Иван", "Иванов")
         assert names_to_initials(names) == ["И. И.", "М. М."]
 
@@ -432,7 +432,7 @@ class TestEncodings:
         path = tmp_path / "one_column.csv"
         path.write_text("just_one_column\nstill_one\n", encoding="utf-8")
         with pytest.raises(ValueError) as error:
-            read_two_column_csv(str(path))
+            read_names_csv(str(path))
         assert "Tried separators" in str(error.value)
         assert "cp1251" in str(error.value)
 
@@ -456,7 +456,7 @@ class TestSeparators:
         csv = tmp_path / "names.csv"
         csv.write_text("Иван, Петър\tИванов\nМария, Анна\tМаринова\n",
                        encoding="utf-8")
-        names = read_two_column_csv(str(csv))
+        names = read_names_csv(str(csv))
         assert (names.iloc[0, 0], names.iloc[0, 1]) == ("Иван, Петър", "Иванов")
         assert names_to_initials(names) == ["И. И.", "М. М."]
 
@@ -464,7 +464,7 @@ class TestSeparators:
         csv = tmp_path / "names.csv"
         csv.write_text("Иванов, Иван;Петров\nДимитров, Анна;Георгиев\n",
                        encoding="utf-8")
-        names = read_two_column_csv(str(csv))
+        names = read_names_csv(str(csv))
         assert names_to_initials(names) == ["И. П.", "Д. Г."]
 
     @pytest.mark.parametrize("first_name", ["Иван-Петър", "Иван Петър"])
@@ -474,7 +474,7 @@ class TestSeparators:
         # initial is the first letter of the whole thing either way.
         csv = tmp_path / "names.csv"
         csv.write_text(f"{first_name}\tИванов\n", encoding="utf-8")
-        names = read_two_column_csv(str(csv))
+        names = read_names_csv(str(csv))
         assert (names.iloc[0, 0], names.iloc[0, 1]) == (first_name, "Иванов")
         assert names_to_initials(names) == ["И. И."]
 
@@ -483,11 +483,38 @@ class TestSeparators:
         # really is the separator.
         csv = tmp_path / "names.csv"
         csv.write_text("Иван,Иванов\nМария,Маринова\n", encoding="utf-8")
-        names = read_two_column_csv(str(csv))
+        names = read_names_csv(str(csv))
         assert names_to_initials(names) == ["И. И.", "М. М."]
 
-    def test_the_comma_is_tried_last(self):
-        # A separator cannot fail the way an encoding can, so the one most
-        # likely to appear inside the data has to be the last resort.
+    @pytest.mark.parametrize("inside", [";", "|"])
+    def test_a_separator_inside_a_field_does_not_beat_the_tab(
+        self, tmp_path, inside
+    ):
+        # The case that set the order. Both splits give two columns, so no
+        # count can choose between them - whichever separator is tried
+        # first wins. Splitting on the ';' here would give
+        # ('Иван', 'Петър\tИванов') and every initial would shift.
+        csv = tmp_path / "names.csv"
+        csv.write_text(f"Иван{inside}Петър\tИванов\n"
+                       f"Мария{inside}Анна\tМаринова\n", encoding="utf-8")
+        names = read_names_csv(str(csv))
+        assert (names.iloc[0, 0], names.iloc[0, 1]) == (
+            f"Иван{inside}Петър", "Иванов"
+        )
+        assert names_to_initials(names) == ["И. И.", "М. М."]
+
+    def test_a_file_really_separated_by_those_still_works(self, tmp_path):
+        # Putting the tab first must not stop the others being found when
+        # one of them is the actual separator.
+        for separator in (";", "|"):
+            csv = tmp_path / f"names{separator and 'x'}.csv"
+            csv.write_text(f"Иван{separator}Иванов\n", encoding="utf-8")
+            assert names_to_initials(read_names_csv(str(csv))) == ["И. И."]
+
+    def test_the_tab_is_tried_first_and_the_comma_last(self):
+        # A separator cannot fail the way an encoding can, so the order is
+        # the only guard: least likely inside a field first, most likely
+        # last. A tab is not a character anyone types mid-word; a comma is.
+        assert CSV_SEPARATORS[0] == "\t"
         assert CSV_SEPARATORS[-1] == ","
         assert set(CSV_SEPARATORS) == {"\t", "|", ";", ","}

@@ -54,7 +54,7 @@ from generate_initials_book import (  # noqa: E402
     build_initials_document,
     group_into_lines,
     names_to_initials,
-    read_two_column_csv,
+    read_names_csv,
 )
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -204,7 +204,7 @@ def load_initials(path: str, limit: int) -> list[str]:
     """Read initials from the CSV, or invent some if it is not there."""
     if os.path.isfile(path):
         with contextlib.redirect_stdout(io.StringIO()):
-            initials = names_to_initials(read_two_column_csv(path))
+            initials = names_to_initials(read_names_csv(path))
     else:
         letters = [chr(code) for code in range(0x410, 0x430)]
         initials = [f"{letters[i % 32]}. {letters[(i * 7) % 32]}."

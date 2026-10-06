@@ -283,7 +283,7 @@ class:
 
 | | |
 | --- | --- |
-| `read_two_column_csv()` | reads the CSV, trying the usual separators and encodings |
+| `read_names_csv()` | reads the CSV, trying the usual separators and encodings |
 | `names_to_initials()` | `Иван, Иванов` → `И. И.`, in one vectorised pandas pass |
 | `Layout` | the five numbers above. Every other figure — the width of one set of initials, the lines per page, the page count — is a property derived from them and from the page size |
 | `Layout.validate()` | the three rules: the values make sense, the columns fit across the page, a line fits down it. Raises `LayoutError` with the message you saw above |

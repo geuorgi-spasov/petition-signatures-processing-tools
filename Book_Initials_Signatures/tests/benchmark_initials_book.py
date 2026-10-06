@@ -33,14 +33,14 @@ from generate_initials_book import (  # noqa: E402
     build_initials_document,
     group_into_lines,
     names_to_initials,
-    read_two_column_csv,
+    read_names_csv,
 )
 
 
 def load_initials(path: str, limit: int | None) -> list[str]:
     """Read the initials from ``path``, or make some up if it is missing."""
     if os.path.isfile(path):
-        initials = names_to_initials(read_two_column_csv(path))
+        initials = names_to_initials(read_names_csv(path))
     else:
         print(f"  '{path}' not found — using generated names.")
         letters = [chr(code) for code in range(0x410, 0x430)]
