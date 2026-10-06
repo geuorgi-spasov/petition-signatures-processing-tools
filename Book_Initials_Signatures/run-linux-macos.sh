@@ -51,8 +51,17 @@ if [ -f "$FONT_FILE" ] && ! font_is_installed; then
     echo "License, see OFL.txt). It goes in your own home folder:"
     echo "    $font_dir/$FONT_FILE"
     echo
-    printf "Install it now? [Y/n] "
-    read -r answer || answer=""
+    if [ -t 0 ]; then
+        printf "Install it now? [Y/n] "
+        read -r answer || answer=""
+    else
+        # The question exists to ask before writing to the home folder,
+        # so with no one there to answer, the answer is no.
+        answer="n"
+        echo "This run has no terminal, so there is no one to ask. Run this"
+        echo "file from a terminal to be asked, or copy the font to the"
+        echo "folder above yourself."
+    fi
     case "$answer" in
         [Nn]*)
             echo
