@@ -20,9 +20,39 @@ from convert_docx_to_pdf import (
 )
 
 
-def _touch(path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.touch()
+class Folders:
+    """An input folder of .docx files and an output folder of PDFs.
+
+    Every discovery test needs the same two folders and spent four lines
+    making them, which buried the one line that was the point of the
+    test. Here the folders exist as soon as the fixture runs, and a test
+    says only what it puts in them.
+    """
+
+    def __init__(self, root):
+        self.input = root / "in"
+        self.output = root / "out"
+        self.input.mkdir()
+        self.output.mkdir()
+
+    def add_docx(self, *names):
+        """Create empty .docx files in the input folder."""
+        for name in names:
+            (self.input / name).touch()
+
+    def add_pdf(self, *names):
+        """Create empty PDFs in the output folder, as if already converted."""
+        for name in names:
+            (self.output / name).touch()
+
+    def discover(self):
+        """``(pending, already_converted, lock_files)`` for these folders."""
+        return discover_conversion_jobs(str(self.input), str(self.output))
+
+
+@pytest.fixture
+def folders(tmp_path):
+    return Folders(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -48,97 +78,47 @@ class TestIsWordLockFile:
 # ---------------------------------------------------------------------------
 
 class TestDiscoverConversionJobs:
-    def test_empty_input_folder(self, tmp_path):
-        (tmp_path / "in").mkdir()
-        (tmp_path / "out").mkdir()
-        pending, done, locks = discover_conversion_jobs(
-            str(tmp_path / "in"), str(tmp_path / "out")
-        )
-        assert pending == []
-        assert done == []
-        assert locks == []
+    def test_empty_input_folder(self, folders):
+        assert folders.discover() == ([], [], [])
 
-    def test_all_pending_when_output_is_empty(self, tmp_path):
-        in_dir = tmp_path / "in"
-        out_dir = tmp_path / "out"
-        _touch(in_dir / "a.docx")
-        _touch(in_dir / "b.docx")
-        _touch(in_dir / "c.docx")
-        out_dir.mkdir()
+    def test_all_pending_when_output_is_empty(self, folders):
+        folders.add_docx("a.docx", "b.docx", "c.docx")
+        assert folders.discover() == (["a.docx", "b.docx", "c.docx"], [], [])
 
-        pending, done, locks = discover_conversion_jobs(str(in_dir), str(out_dir))
-        assert pending == ["a.docx", "b.docx", "c.docx"]
-        assert done == []
-        assert locks == []
+    def test_skips_files_with_existing_pdf(self, folders):
+        folders.add_docx("a.docx", "b.docx", "c.docx")
+        folders.add_pdf("b.pdf")
+        assert folders.discover() == (["a.docx", "c.docx"], ["b.docx"], [])
 
-    def test_skips_files_with_existing_pdf(self, tmp_path):
-        in_dir = tmp_path / "in"
-        out_dir = tmp_path / "out"
-        _touch(in_dir / "a.docx")
-        _touch(in_dir / "b.docx")
-        _touch(in_dir / "c.docx")
-        _touch(out_dir / "b.pdf")
+    def test_ignores_non_docx_files(self, folders):
+        folders.add_docx("real.docx", "readme.txt", "image.png", ".hidden")
+        assert folders.discover() == (["real.docx"], [], [])
 
-        pending, done, locks = discover_conversion_jobs(str(in_dir), str(out_dir))
-        assert pending == ["a.docx", "c.docx"]
-        assert done == ["b.docx"]
-        assert locks == []
-
-    def test_ignores_non_docx_files(self, tmp_path):
-        in_dir = tmp_path / "in"
-        out_dir = tmp_path / "out"
-        _touch(in_dir / "real.docx")
-        _touch(in_dir / "readme.txt")
-        _touch(in_dir / "image.png")
-        _touch(in_dir / ".hidden")
-        out_dir.mkdir()
-
-        pending, done, locks = discover_conversion_jobs(str(in_dir), str(out_dir))
-        assert pending == ["real.docx"]
-        assert done == []
-        assert locks == []
-
-    def test_handles_uppercase_docx_extension(self, tmp_path):
-        in_dir = tmp_path / "in"
-        out_dir = tmp_path / "out"
-        _touch(in_dir / "MIXED.DOCX")
-        out_dir.mkdir()
-
-        pending, done, locks = discover_conversion_jobs(str(in_dir), str(out_dir))
+    def test_handles_uppercase_docx_extension(self, folders):
+        folders.add_docx("MIXED.DOCX")
+        pending, _, _ = folders.discover()
         assert pending == ["MIXED.DOCX"]
 
-    def test_results_are_sorted(self, tmp_path):
-        in_dir = tmp_path / "in"
-        out_dir = tmp_path / "out"
-        for name in ["zebra.docx", "alpha.docx", "mango.docx"]:
-            _touch(in_dir / name)
-        out_dir.mkdir()
-
-        pending, _, _ = discover_conversion_jobs(str(in_dir), str(out_dir))
+    def test_results_are_sorted(self, folders):
+        folders.add_docx("zebra.docx", "alpha.docx", "mango.docx")
+        pending, _, _ = folders.discover()
         assert pending == ["alpha.docx", "mango.docx", "zebra.docx"]
 
-    def test_handles_bulgarian_filenames(self, tmp_path):
-        in_dir = tmp_path / "in"
-        out_dir = tmp_path / "out"
-        _touch(in_dir / "Папка 1 с подписи от 1 до 1000.docx")
-        _touch(in_dir / "Папка 2 с подписи от 1001 до 2000.docx")
-        _touch(out_dir / "Папка 1 с подписи от 1 до 1000.pdf")
+    def test_handles_bulgarian_filenames(self, folders):
+        folders.add_docx("Папка 1 с подписи от 1 до 1000.docx",
+                         "Папка 2 с подписи от 1001 до 2000.docx")
+        folders.add_pdf("Папка 1 с подписи от 1 до 1000.pdf")
+        assert folders.discover() == (
+            ["Папка 2 с подписи от 1001 до 2000.docx"],
+            ["Папка 1 с подписи от 1 до 1000.docx"],
+            [],
+        )
 
-        pending, done, locks = discover_conversion_jobs(str(in_dir), str(out_dir))
-        assert pending == ["Папка 2 с подписи от 1001 до 2000.docx"]
-        assert done == ["Папка 1 с подписи от 1 до 1000.docx"]
-        assert locks == []
-
-    def test_filters_out_word_lock_files(self, tmp_path):
+    def test_filters_out_word_lock_files(self, folders):
         """Lock files like ``~$пка 11.docx`` must be excluded."""
-        in_dir = tmp_path / "in"
-        out_dir = tmp_path / "out"
-        _touch(in_dir / "Папка 11.docx")
-        _touch(in_dir / "~$пка 11.docx")          # Word lock file
-        _touch(in_dir / "~$some_other_doc.docx")   # Another lock file
-        out_dir.mkdir()
-
-        pending, done, locks = discover_conversion_jobs(str(in_dir), str(out_dir))
+        folders.add_docx("Папка 11.docx", "~$пка 11.docx",
+                         "~$some_other_doc.docx")
+        pending, done, locks = folders.discover()
         assert pending == ["Папка 11.docx"]
         assert done == []
         assert sorted(locks) == ["~$some_other_doc.docx", "~$пка 11.docx"]
@@ -149,51 +129,37 @@ class TestDiscoverConversionJobs:
 # ---------------------------------------------------------------------------
 
 class TestVerifyConversionResults:
-    def test_all_successful(self, tmp_path):
-        out_dir = tmp_path / "out"
-        out_dir.mkdir()
-        _touch(out_dir / "a.pdf")
-        _touch(out_dir / "b.pdf")
-
+    def test_all_successful(self, folders):
+        folders.add_pdf("a.pdf", "b.pdf")
         successful, failed = verify_conversion_results(
-            ["a.docx", "b.docx"], str(out_dir)
+            ["a.docx", "b.docx"], str(folders.output)
         )
         assert successful == ["a.docx", "b.docx"]
         assert failed == []
 
-    def test_all_failed(self, tmp_path):
-        out_dir = tmp_path / "out"
-        out_dir.mkdir()
-
+    def test_all_failed(self, folders):
         successful, failed = verify_conversion_results(
-            ["a.docx", "b.docx"], str(out_dir)
+            ["a.docx", "b.docx"], str(folders.output)
         )
         assert successful == []
         assert failed == ["a.docx", "b.docx"]
 
-    def test_mixed(self, tmp_path):
-        out_dir = tmp_path / "out"
-        out_dir.mkdir()
-        _touch(out_dir / "a.pdf")
-        _touch(out_dir / "c.pdf")
-
+    def test_mixed(self, folders):
+        folders.add_pdf("a.pdf", "c.pdf")
         successful, failed = verify_conversion_results(
-            ["a.docx", "b.docx", "c.docx"], str(out_dir)
+            ["a.docx", "b.docx", "c.docx"], str(folders.output)
         )
         assert successful == ["a.docx", "c.docx"]
         assert failed == ["b.docx"]
 
-    def test_handles_bulgarian_filenames(self, tmp_path):
-        out_dir = tmp_path / "out"
-        out_dir.mkdir()
-        _touch(out_dir / "Папка 1 с подписи от 1 до 1000.pdf")
-
+    def test_handles_bulgarian_filenames(self, folders):
+        folders.add_pdf("Папка 1 с подписи от 1 до 1000.pdf")
         successful, failed = verify_conversion_results(
             [
                 "Папка 1 с подписи от 1 до 1000.docx",
                 "Папка 2 с подписи от 1001 до 2000.docx",
             ],
-            str(out_dir),
+            str(folders.output),
         )
         assert successful == ["Папка 1 с подписи от 1 до 1000.docx"]
         assert failed == ["Папка 2 с подписи от 1001 до 2000.docx"]
@@ -225,6 +191,20 @@ class TestFindWord:
         for parts in converter.WORD_PATTERNS:
             joined = ntpath.join(r"C:\Program Files", *parts)
             assert "/" not in joined, joined
+
+    def test_finds_word_where_the_macos_installer_puts_it(self, monkeypatch):
+        # The only branch that is not a Program Files search: on macOS
+        # Word is one fixed bundle path, so there is nothing to glob.
+        app = "/Applications/Microsoft Word.app"
+        monkeypatch.setattr(sys, "platform", "darwin")
+        monkeypatch.setattr(converter.os.path, "exists",
+                            lambda path: path == app)
+        assert converter._find_word() == app
+
+    def test_no_word_on_macos_without_it(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "darwin")
+        monkeypatch.setattr(converter.os.path, "exists", lambda path: False)
+        assert converter._find_word() is None
 
     def test_no_word_on_linux(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "linux")
