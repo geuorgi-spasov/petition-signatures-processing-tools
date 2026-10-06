@@ -8,12 +8,20 @@ from split_signatures_into_folders import (
     CSV_ENCODINGS,
     CSV_SEPARATORS,
     DEFAULT_COLUMN_WIDTHS_CM,
+    INPUT_CSV,
     LEFT_MARGIN_CM,
+    OUTPUT_DOCX_FOLDER,
     PAGE_WIDTH_CM,
     RIGHT_MARGIN_CM,
+    ROWS_PER_FILE,
+    ROWS_PER_PAGE,
     apply_full_table_borders,
-    in_blocks_of,
+    build_arg_parser,
     build_folder_document,
+    fits_on_the_page,
+    in_blocks_of,
+    main,
+    max_rows_per_page,
     read_signatures_csv,
     scale_column_widths,
 )
@@ -300,3 +308,45 @@ class TestInBlocksOf:
         rows = self._rows(1001)
         seen = pd.concat(list(in_blocks_of(rows, 10)))
         assert list(seen["a"]) == list(range(1001))
+
+
+# ---------------------------------------------------------------------------
+# The command line
+# ---------------------------------------------------------------------------
+
+class TestCommandLine:
+    def test_the_defaults_are_the_constants(self):
+        args = build_arg_parser().parse_args([])
+        assert args.input == INPUT_CSV
+        assert args.output == OUTPUT_DOCX_FOLDER
+        assert args.rows_per_file == ROWS_PER_FILE
+        assert args.rows_per_page == ROWS_PER_PAGE
+
+    def test_a_dry_run_writes_nothing(self, tmp_path, monkeypatch, capsys):
+        csv = tmp_path / "s.csv"
+        csv.write_text("Номер\tИме\tФамилия\n1\tИван\tИванов\n", encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        code = main(["--input", str(csv), "--output", "out", "--dry-run"])
+        assert code == 0
+        assert not (tmp_path / "out").exists()
+        assert "nothing written" in capsys.readouterr().out
+
+    def test_a_page_that_cannot_fit_is_refused(self, capsys):
+        # The table would run off the page and the declared page count
+        # would stop matching the rendered one - the one thing this
+        # toolkit may not get wrong.
+        code = main(["--rows-per-page", str(max_rows_per_page() + 1),
+                     "--dry-run"])
+        assert code == 1
+        assert "do not fit" in capsys.readouterr().out
+
+    def test_the_default_page_fits(self):
+        assert fits_on_the_page(ROWS_PER_PAGE)
+        assert ROWS_PER_PAGE <= max_rows_per_page()
+
+    def test_limit_shortens_the_run(self, tmp_path, capsys):
+        csv = tmp_path / "s.csv"
+        rows = "".join(f"{i}\tИван\tИванов\n" for i in range(1, 51))
+        csv.write_text("Номер\tИме\tФамилия\n" + rows, encoding="utf-8")
+        main(["--input", str(csv), "--limit", "20", "--dry-run"])
+        assert "20 signatures" in capsys.readouterr().out

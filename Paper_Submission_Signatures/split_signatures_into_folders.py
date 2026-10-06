@@ -15,6 +15,7 @@ See README.md for the full workflow.
 
 from __future__ import annotations
 
+import argparse
 import math
 import os
 import time
@@ -125,6 +126,24 @@ def in_blocks_of(rows: pd.DataFrame, size: int) -> Iterator[pd.DataFrame]:
     """
     for start in range(0, len(rows), size):
         yield rows.iloc[start:start + size]
+
+
+def max_rows_per_page() -> int:
+    """How many data rows fit between the top and bottom offsets.
+
+    One row is ROW_HEIGHT_CM high and the header row takes one more, so
+    this is the usable height divided by the row height, less that
+    header. It is the same arithmetic the page breaks rely on - if more
+    rows are asked for than this, the table runs off the page and the
+    declared page count stops matching the rendered one.
+    """
+    usable_cm = PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
+    return int(usable_cm // ROW_HEIGHT_CM) - 1
+
+
+def fits_on_the_page(rows_per_page: int) -> bool:
+    """Whether that many data rows, plus the header row, fit on a page."""
+    return 1 <= rows_per_page <= max_rows_per_page()
 
 
 def _format_duration(seconds: float) -> str:
@@ -330,16 +349,18 @@ def build_folder_document(
     folder_rows: pd.DataFrame,
     header: list[str],
     column_widths: list[float],
+    rows_per_page: int = ROWS_PER_PAGE,
+    rows_per_file: int = ROWS_PER_FILE,
 ) -> tuple[DocumentType, int]:
     """Build the Word document for a single submission folder (~1000 rows)."""
     doc = create_landscape_document()
 
-    pages_in_file = math.ceil(len(folder_rows) / ROWS_PER_PAGE)
+    pages_in_file = math.ceil(len(folder_rows) / rows_per_page)
     # Pages in a *full* folder — used so page numbering continues across files
-    pages_per_full_folder = math.ceil(ROWS_PER_FILE / ROWS_PER_PAGE)
+    pages_per_full_folder = math.ceil(rows_per_file / rows_per_page)
 
     for page_num, page_rows in enumerate(
-            in_blocks_of(folder_rows, ROWS_PER_PAGE), start=1):
+            in_blocks_of(folder_rows, rows_per_page), start=1):
         add_page_table(doc, header, page_rows, column_widths)
 
         global_page = page_num + (folder_number - 1) * pages_per_full_folder
@@ -355,16 +376,55 @@ def build_folder_document(
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    print(f"Reading '{INPUT_CSV}'...")
+def build_arg_parser() -> argparse.ArgumentParser:
+    """The command line. Every default is the constant of the same name."""
+    parser = argparse.ArgumentParser(
+        description="Split a signatures CSV into Word submission documents."
+    )
+    parser.add_argument("--input", default=INPUT_CSV,
+                        help="CSV file to read")
+    parser.add_argument("--output", default=OUTPUT_DOCX_FOLDER,
+                        help="Folder to write the documents into")
+    parser.add_argument("--rows-per-file", type=int, default=ROWS_PER_FILE,
+                        help="Signatures in one submission folder")
+    parser.add_argument("--rows-per-page", type=int, default=ROWS_PER_PAGE,
+                        help="Signatures on one printed page. Changing this "
+                             "changes where the page breaks fall, so re-run "
+                             "tests/check_rendering.py afterwards")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Only process the first N signatures")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Report what would be written, write nothing")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+
+    if args.rows_per_file < 1 or args.rows_per_page < 1:
+        print("ERROR: --rows-per-file and --rows-per-page must be at least 1.")
+        return 1
+    if not fits_on_the_page(args.rows_per_page):
+        print(f"ERROR: {args.rows_per_page} rows of {ROW_HEIGHT_CM} cm plus a "
+              f"header do not fit between the {TOP_MARGIN_CM} cm and "
+              f"{BOTTOM_MARGIN_CM} cm offsets of a "
+              f"{PAGE_WIDTH_CM} x {PAGE_HEIGHT_CM} cm page.")
+        print(f"Use at most {max_rows_per_page()} row(s) a page, or a smaller "
+              f"ROW_HEIGHT_CM.")
+        return 1
+
+    print(f"Reading '{args.input}'...")
     try:
-        df = read_signatures_csv(INPUT_CSV)
+        df = read_signatures_csv(args.input)
     except FileNotFoundError:
-        print(f"ERROR: file '{INPUT_CSV}' not found in this folder.")
-        return
+        print(f"ERROR: file '{args.input}' not found in this folder.")
+        return 1
     except ValueError as exc:
         print(f"ERROR: {exc}")
-        return
+        return 1
+
+    if args.limit is not None:
+        df = df.head(args.limit)
 
     print(f"Read {len(df)} rows with {len(df.columns)} columns.")
     print(f"Columns: {list(df.columns)}")
@@ -373,11 +433,19 @@ def main() -> None:
     column_widths = scale_column_widths(len(header))
     print(f"Column widths (cm): {[round(w, 2) for w in column_widths]}")
 
-    # exist_ok: a second run writes into the same folder rather than failing
-    os.makedirs(OUTPUT_DOCX_FOLDER, exist_ok=True)
-    print(f"Writing output into '{OUTPUT_DOCX_FOLDER}/'.")
+    total_files = math.ceil(len(df) / args.rows_per_file)
+    total_pages = math.ceil(len(df) / args.rows_per_page)
 
-    total_files = math.ceil(len(df) / ROWS_PER_FILE)
+    if args.dry_run:
+        print(f"\n{len(df)} signatures -> {total_files} file(s), "
+              f"{total_pages} page(s) at {args.rows_per_page} a page.")
+        print("Dry run — nothing written.")
+        return 0
+
+    # exist_ok: a second run writes into the same folder rather than failing
+    os.makedirs(args.output, exist_ok=True)
+    print(f"Writing output into '{args.output}/'.")
+
     print(f"\nCreating {total_files} submission file(s)...\n")
 
     overall_start = time.perf_counter()
@@ -388,17 +456,18 @@ def main() -> None:
     # folder exactly - which is why the first and last row are read before
     # the document is built.
     for folder_number, folder_rows in enumerate(
-            in_blocks_of(df, ROWS_PER_FILE), start=1):
+            in_blocks_of(df, args.rows_per_file), start=1):
         first_id = str(folder_rows.iloc[0, 0])
         last_id = str(folder_rows.iloc[-1, 0])
 
         doc, pages = build_folder_document(
-            folder_number, folder_rows, header, column_widths
+            folder_number, folder_rows, header, column_widths,
+            args.rows_per_page, args.rows_per_file
         )
         filename = (
             f"Папка {folder_number} с подписи от {first_id} до {last_id}.docx"
         )
-        output_path = os.path.join(OUTPUT_DOCX_FOLDER, filename)
+        output_path = os.path.join(args.output, filename)
         doc.save(output_path)
 
         # Every folder takes about as long as the last, so the average so
@@ -421,9 +490,10 @@ def main() -> None:
     total_time = time.perf_counter() - overall_start
     print(
         f"\nDone in {_format_duration(total_time)}. "
-        f"Created {total_files} file(s) in '{OUTPUT_DOCX_FOLDER}/'."
+        f"Created {total_files} file(s) in '{args.output}/'."
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

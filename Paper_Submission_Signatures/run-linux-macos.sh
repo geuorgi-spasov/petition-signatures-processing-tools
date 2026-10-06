@@ -23,5 +23,10 @@ fi
 
 . .venv/bin/activate
 pip install --quiet --requirement requirements.txt
+
+# Arguments go to the converter, which is what this launcher's own
+# options are for (--word, --libreoffice). The splitting step has
+# options of its own now - run it directly to use them:
+#     python split_signatures_into_folders.py --help
 python split_signatures_into_folders.py
 python convert_docx_to_pdf.py "$@"

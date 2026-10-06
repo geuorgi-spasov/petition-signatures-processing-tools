@@ -186,15 +186,45 @@ reason not to use `--libreoffice` for every run.
 
 ## Customising the scripts
 
-Both scripts begin with a `# Configuration` block of `UPPER_CASE`
-variables. Edit, save, and re-run.
+The things you are most likely to change have command-line flags, so
+nothing has to be edited:
 
-**`split_signatures_into_folders.py`** exposes:
+```
+python split_signatures_into_folders.py --help
+```
 
-- `INPUT_CSV` — the CSV file name
-- `OUTPUT_DOCX_FOLDER` — where the `.docx` files are written
-  (default `"signatures_docx"`)
-- `ROWS_PER_FILE`, `ROWS_PER_PAGE` — grouping (defaults 1000 and 10)
+| Flag | Constant | Default | What it does |
+| --- | --- | --- | --- |
+| `--input` | `INPUT_CSV` | `Signatures_from_the_database_raw.csv` | CSV file to read |
+| `--output` | `OUTPUT_DOCX_FOLDER` | `signatures_docx` | Folder to write the documents into |
+| `--rows-per-file` | `ROWS_PER_FILE` | `1000` | Signatures in one submission folder |
+| `--rows-per-page` | `ROWS_PER_PAGE` | `10` | Signatures on one printed page |
+| `--limit` | — | all | Only process the first N signatures |
+| `--dry-run` | — | off | Report the file and page counts, write nothing |
+
+`--dry-run` is the quick way to see what a change would do:
+
+```
+python split_signatures_into_folders.py --rows-per-page 12 --dry-run
+```
+
+`--rows-per-page` is checked before anything is written: the table plus
+its header row has to fit between the top and bottom offsets, and asking
+for more than fits is refused rather than silently producing a document
+whose declared page count is wrong. At the default row height of 1.3 cm
+that limit is 12. **Changing it moves every page break, so re-run
+`tests/check_rendering.py` afterwards** — that is the check that proves
+the declared page count still matches the rendered one.
+
+The launcher scripts pass their arguments to the *conversion* step
+(`--word`, `--libreoffice`), so to use the flags above, run
+`split_signatures_into_folders.py` directly.
+
+Everything else is a constant in the `# Configuration` block at the top
+of each script — edit, save, and re-run.
+
+**`split_signatures_into_folders.py`** also exposes:
+
 - `PAGE_WIDTH_CM`, `PAGE_HEIGHT_CM` and the four margin constants —
   page layout, in centimeters
 - `ROW_HEIGHT_CM` — height of each table row in centimeters

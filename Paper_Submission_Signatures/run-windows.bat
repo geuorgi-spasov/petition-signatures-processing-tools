@@ -14,6 +14,9 @@ echo Installing what the program needs...
 python -m pip install --quiet --requirement requirements.txt
 if errorlevel 1 goto failed
 
+rem Arguments go to the converter (--word, --libreoffice). The
+rem splitting step has options of its own - run it directly:
+rem     python split_signatures_into_folders.py --help
 python split_signatures_into_folders.py
 if errorlevel 1 goto failed
 
