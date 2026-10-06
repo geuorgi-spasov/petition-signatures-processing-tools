@@ -1,5 +1,6 @@
 """
 Converts every .docx file inside INPUT_FOLDER to a PDF in OUTPUT_FOLDER,
+or wherever --input and --output point instead,
 skipping already-converted files and Word lock files. Safe to re-run.
 
 Performance: pending files are converted in a single batch so that
@@ -305,13 +306,22 @@ def get_converter(prefer: str | None = None):
 # ---------------------------------------------------------------------------
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    """The command line: which program should do the converting."""
+    """The command line: which folders, and which program converts them."""
     parser = argparse.ArgumentParser(
         description=(
             f"Convert every .docx in '{INPUT_FOLDER}' to a PDF in "
             f"'{OUTPUT_FOLDER}'. Already-converted files are skipped."
         )
     )
+    # The splitting step takes --output, so this step has to take --input:
+    # send the first one somewhere else and the second has to be able to
+    # follow it. The defaults are the two folders the pair agrees on.
+    parser.add_argument("--input", default=INPUT_FOLDER,
+                        help=f"Folder of .docx files (default: "
+                             f"{INPUT_FOLDER!r})")
+    parser.add_argument("--output", default=OUTPUT_FOLDER,
+                        help=f"Folder to write the PDFs into (default: "
+                             f"{OUTPUT_FOLDER!r})")
     choice = parser.add_mutually_exclusive_group()
     choice.add_argument(
         "--word", dest="prefer", action="store_const", const="word",
@@ -329,18 +339,18 @@ def main(argv: list[str] | None = None) -> None:
     args = build_arg_parser().parse_args(argv)
     convert = get_converter(args.prefer)
 
-    if not os.path.isdir(INPUT_FOLDER):
-        print(f"ERROR: folder '{INPUT_FOLDER}' not found.")
+    if not os.path.isdir(args.input):
+        print(f"ERROR: folder '{args.input}' not found.")
         print(
             "Run 'split_signatures_into_folders.py' first, or create the "
             "folder and put .docx files inside it."
         )
         sys.exit(1)
 
-    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    os.makedirs(args.output, exist_ok=True)
 
     pending, already_converted, lock_files = discover_conversion_jobs(
-        INPUT_FOLDER, OUTPUT_FOLDER
+        args.input, args.output
     )
     real_files = len(pending) + len(already_converted)
 
@@ -354,18 +364,18 @@ def main(argv: list[str] | None = None) -> None:
         print()
 
     if real_files == 0:
-        print(f"No .docx files found in '{INPUT_FOLDER}'.")
+        print(f"No .docx files found in '{args.input}'.")
         return
 
     if not pending:
         print(
-            f"All {real_files} file(s) in '{INPUT_FOLDER}' are already "
+            f"All {real_files} file(s) in '{args.input}' are already "
             f"converted. Nothing to do."
         )
         return
 
     print(
-        f"Found {real_files} .docx file(s) in '{INPUT_FOLDER}' "
+        f"Found {real_files} .docx file(s) in '{args.input}' "
         f"({len(already_converted)} already converted, "
         f"{len(pending)} pending).\n"
     )
@@ -378,7 +388,7 @@ def main(argv: list[str] | None = None) -> None:
     with tempfile.TemporaryDirectory() as staging:
         for filename in pending:
             shutil.copy(
-                os.path.join(INPUT_FOLDER, filename),
+                os.path.join(args.input, filename),
                 os.path.join(staging, filename),
             )
 
@@ -388,7 +398,7 @@ def main(argv: list[str] | None = None) -> None:
             f"(Word / LibreOffice opens once)..."
         )
         try:
-            convert(staging, OUTPUT_FOLDER)
+            convert(staging, args.output)
         except Exception as exc:
             batch_ok = False
             print(f"\nBatch conversion failed: {exc}")
@@ -399,7 +409,7 @@ def main(argv: list[str] | None = None) -> None:
             print("Retrying each file individually...\n")
             for filename in pending:
                 src = os.path.join(staging, filename)
-                dst = os.path.join(OUTPUT_FOLDER, filename[:-5] + ".pdf")
+                dst = os.path.join(args.output, filename[:-5] + ".pdf")
                 try:
                     convert(src, dst)
                     print(f"  OK: {filename}")
@@ -407,7 +417,7 @@ def main(argv: list[str] | None = None) -> None:
                     print(f"  FAIL: {filename} — {file_exc}")
 
     elapsed = time.perf_counter() - start
-    successful, failed = verify_conversion_results(pending, OUTPUT_FOLDER)
+    successful, failed = verify_conversion_results(pending, args.output)
 
     per_file = elapsed / max(1, len(successful))
     print(
@@ -420,7 +430,7 @@ def main(argv: list[str] | None = None) -> None:
         print("Failed files:")
         for filename in failed:
             print(f"  - {filename}")
-    print(f"PDFs are in '{OUTPUT_FOLDER}/'.")
+    print(f"PDFs are in '{args.output}/'.")
 
 
 if __name__ == "__main__":
