@@ -23,6 +23,12 @@ Usage:
     python tests/check_rendering.py
     python tests/check_rendering.py --limit 20000
     python tests/check_rendering.py --columns 5 --font-size 12
+    python tests/check_rendering.py --word
+
+The last one matters on Windows. LibreOffice is the default because it
+runs everywhere, but Word is the renderer that fits fewer lines on a page
+and so the one that produced the 755-page book - measure it where it is
+the program that will open the file.
 """
 
 from __future__ import annotations
@@ -62,12 +68,12 @@ def say(message: str) -> None:
     print(message, flush=True)
 
 
-def find_converter() -> tuple[str, str] | None:
-    """Return ``(kind, path)`` for a program that can make PDFs, or None."""
+def find_libreoffice() -> str | None:
+    """Return the path to the LibreOffice CLI, or None."""
     for name in ("libreoffice", "soffice"):
         path = shutil.which(name)
         if path:
-            return ("libreoffice", path)
+            return path
 
     candidates = ["/Applications/LibreOffice.app/Contents/MacOS/soffice"]
     for directory in (os.environ.get("ProgramFiles", r"C:\Program Files"),
@@ -78,13 +84,45 @@ def find_converter() -> tuple[str, str] | None:
             )
     for candidate in candidates:
         if os.path.exists(candidate):
-            return ("libreoffice", candidate)
+            return candidate
+    return None
 
+
+def find_word() -> str | None:
+    """Return ``"docx2pdf"`` if the package that drives Word is installed."""
     try:
         import docx2pdf  # noqa: F401
     except ImportError:
         return None
-    return ("word", "docx2pdf")
+    return "docx2pdf"
+
+
+def find_converter(prefer: str | None = None) -> tuple[str, str] | None:
+    """Return ``(kind, path)`` for a program that can make PDFs, or None.
+
+    Which program matters, and not only for speed. The two disagree about
+    how many lines fit on a page - Word fits fewer - and that disagreement
+    is the whole reason this check exists. So whichever one is about to
+    print the book is the one worth measuring, and on a machine with both
+    it has to be possible to say which.
+
+    Unasked, LibreOffice wins: it is the one that can be installed
+    anywhere, so it is the one a check that must run everywhere defaults
+    to. That is a default, not a verdict - pass --word on a Windows
+    machine where Word is what will open the book.
+    """
+    if prefer == "word":
+        path = find_word()
+        return ("word", path) if path else None
+    if prefer == "libreoffice":
+        path = find_libreoffice()
+        return ("libreoffice", path) if path else None
+
+    path = find_libreoffice()
+    if path:
+        return ("libreoffice", path)
+    path = find_word()
+    return ("word", path) if path else None
 
 
 def font_environment(work_dir: str) -> dict[str, str]:
@@ -175,6 +213,12 @@ def main() -> int:
     parser.add_argument("--margin", type=float, default=Layout().margin_cm)
     parser.add_argument("--font-name", default=FONT_NAME,
                         help="Font to set the book in")
+    choice = parser.add_mutually_exclusive_group()
+    choice.add_argument("--word", dest="prefer", action="store_const",
+                        const="word", help="Measure Microsoft Word, which "
+                                           "fits fewer lines on a page")
+    choice.add_argument("--libreoffice", dest="prefer", action="store_const",
+                        const="libreoffice", help="Measure LibreOffice")
     args = parser.parse_args()
 
     # Every step below is slow enough to look like a hang, and the two
@@ -184,8 +228,17 @@ def main() -> int:
     # going straight to a console.
     say("Looking for a program that can make a PDF...")
 
-    converter = find_converter()
+    converter = find_converter(args.prefer)
     if converter is None:
+        if args.prefer == "word":
+            say("--word was asked for, but the 'docx2pdf' package that "
+                "drives Word is not installed:")
+            say("    pip install -r tests/test_requirements.txt")
+            return 1
+        if args.prefer == "libreoffice":
+            say("--libreoffice was asked for, but LibreOffice was not found.")
+            say("Install it from https://www.libreoffice.org/ and try again.")
+            return 1
         say("No program found that can make a PDF.")
         say("Install LibreOffice (free) or, on Windows/macOS, Microsoft Word.")
         say("On Windows with Word already installed, the package that "
