@@ -55,6 +55,14 @@ RIGHT_MARGIN_CM = 2.0
 TOP_MARGIN_CM = 1.5
 BOTTOM_MARGIN_CM = 2.0
 
+# How much height the footer takes off every page. Measured, not derived:
+# the footer is a blank line and two 12 pt italic lines, and what actually
+# fits is settled by the renderer, not by adding those up. Ten rows a page
+# is the most that renders as declared; eleven does not. Re-measure with
+# `python tests/check_rendering.py --rows-per-page N` if the row height,
+# the footer or the offsets change.
+FOOTER_BLOCK_CM = 2.0
+
 # Row layout
 ROW_HEIGHT_CM = 1.3
 BODY_FONT = "Arial"
@@ -132,12 +140,19 @@ def max_rows_per_page() -> int:
     """How many data rows fit between the top and bottom offsets.
 
     One row is ROW_HEIGHT_CM high and the header row takes one more, so
-    this is the usable height divided by the row height, less that
-    header. It is the same arithmetic the page breaks rely on - if more
-    rows are asked for than this, the table runs off the page and the
-    declared page count stops matching the rendered one.
+    this is the usable height - less what the footer takes - divided by
+    the row height, less that header. It is the same arithmetic the page
+    breaks rely on: if more rows are asked for than this, the table runs
+    off the page and the declared page count stops matching the rendered
+    one.
+
+    The footer term was missing until tests/check_rendering.py was given
+    --rows-per-page and could finally render the thing. Without it this
+    returned 12, and at 11 and 12 rows a page a document declaring 6
+    pages came out as 11. The shipped default of 10 was never affected.
     """
-    usable_cm = PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
+    usable_cm = (PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
+                 - FOOTER_BLOCK_CM)
     return int(usable_cm // ROW_HEIGHT_CM) - 1
 
 
