@@ -23,7 +23,7 @@ Linux.
 ### 📖 [`Book_Initials_Signatures/`](Book_Initials_Signatures/)
 
 Turns a CSV of signatory names into a printable A5 book listing just
-their initials (e.g. `И. И.`), in the Bebas Neue Cyrillic font, several
+their initials (e.g. `И. И.`), in the Oswald font, several
 per line. The page size, the number of columns, the page offsets, the
 distance between the initials, the line spacing and the font size are all
 parameters with sensible defaults; the script reports how many pages the

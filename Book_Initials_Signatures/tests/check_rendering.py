@@ -6,7 +6,8 @@ This is the check no unit test can do. The layout arithmetic can be
 perfectly self-consistent and still be wrong, because the program that
 paginates the document gets the final say — Word fits fewer lines on a
 page than the arithmetic predicts, LibreOffice fits exactly as many. That
-disagreement once turned a 378-page book into a 755-page one, and every
+disagreement once turned a 378-page book into a 755-page one - back
+when the book ran 7 columns to a line - and every
 unit test passed throughout.
 
 What it reports:
@@ -50,7 +51,7 @@ from generate_initials_book import (  # noqa: E402
 )
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BUNDLED_FONT = os.path.join(HERE, "bebasneuecyrillic.ttf")
+BUNDLED_FONT = os.path.join(HERE, "oswald.ttf")
 
 DEFAULT_LIMIT = 20_000
 TOLERANCE = 0.10  # a tenth more pages than predicted is still acceptable
@@ -244,8 +245,12 @@ def main() -> int:
 
     # A page measured with a stand-in font is not the page that gets
     # printed, so say which font actually went into the PDF.
-    wanted = args.font_name.replace(" ", "")
-    if any(wanted.lower() == name.lower() for name in embedded):
+    # A PDF names the face, not the family: Oswald goes in as
+    # "Oswald-Regular". Match the family and let a style suffix follow,
+    # or this reports the right font as missing.
+    wanted = args.font_name.replace(" ", "").lower()
+    if any(name.lower() == wanted or name.lower().startswith(wanted + "-")
+           for name in embedded):
         print(f"\nFont: {args.font_name} — the real one.")
     else:
         print(f"\nFont: {args.font_name} was NOT used. The PDF contains "

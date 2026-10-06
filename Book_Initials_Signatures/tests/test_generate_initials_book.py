@@ -24,10 +24,11 @@ from generate_initials_book import (
 )
 
 # The defaults on A5: 1.5 cm offsets leave 11.8 × 18.0 cm. At 10 pt and
-# line spacing 1.2 a line is 12 pt high, so 42 lines fit, 7 to a line.
+# line spacing 1.2 a line is 12 pt high, so 42 lines fit, 6 to a line
+# in Oswald.
 DEFAULT = Layout()
 LINES_PER_PAGE = 42
-INITIALS_PER_PAGE = 294
+INITIALS_PER_PAGE = 252
 
 
 def layout(**changes) -> Layout:
@@ -138,7 +139,7 @@ class TestLayoutMaths:
     def test_the_defaults_are_an_a5_book_page(self):
         assert (DEFAULT.page_width_cm, DEFAULT.page_height_cm) == (14.8, 21.0)
         assert DEFAULT.page_name == "A5"
-        assert DEFAULT.columns == 7
+        assert DEFAULT.columns == 6
         assert DEFAULT.lines_per_page == LINES_PER_PAGE
         assert DEFAULT.initials_per_page == INITIALS_PER_PAGE
 
@@ -151,7 +152,7 @@ class TestLayoutMaths:
         a4.validate()
         assert a4.page_name == "A4"
         assert a4.lines_per_page == 63
-        assert a4.pages_for(110_942) == 252
+        assert a4.pages_for(110_942) == 294
 
     def test_an_unusual_page_size_is_named_by_its_measurements(self):
         assert layout(page_width_cm=13.0, page_height_cm=20.0).page_name == (
@@ -170,10 +171,10 @@ class TestLayoutMaths:
     def test_the_page_count_is_rounded_up(self):
         assert DEFAULT.pages_for(INITIALS_PER_PAGE) == 1
         assert DEFAULT.pages_for(INITIALS_PER_PAGE + 1) == 2
-        assert DEFAULT.pages_for(110_942) == 378
+        assert DEFAULT.pages_for(110_942) == 441
 
     def test_more_columns_means_fewer_pages(self):
-        assert layout(columns=7).pages_for(10_000) < (
+        assert layout(columns=6).pages_for(10_000) < (
             layout(columns=4).pages_for(10_000)
         )
 
@@ -210,7 +211,7 @@ class TestLayoutMaths:
     def test_the_summary_mentions_the_columns_and_the_pages(self):
         summary = DEFAULT.describe(1000)
         assert "A5" in summary
-        assert "7 column(s)" in summary
+        assert "6 column(s)" in summary
         assert "about 4 pages" in summary
 
 
@@ -225,11 +226,11 @@ class TestLayoutValidation:
     def test_too_many_columns_for_the_page_is_rejected(self):
         with pytest.raises(LayoutError) as error:
             layout(columns=20).validate()
-        assert "Use at most 7 column(s)" in str(error.value)
+        assert "Use at most 6 column(s)" in str(error.value)
         assert "on A5" in str(error.value)
 
     def test_the_suggested_number_of_columns_really_fits(self):
-        layout(columns=7).validate()  # must not raise
+        layout(columns=6).validate()  # must not raise
 
     def test_too_big_a_font_for_the_columns_is_rejected(self):
         with pytest.raises(LayoutError) as error:
@@ -365,7 +366,7 @@ class TestMain:
                      "--columns", "20"])
         assert code == 1
         assert not (names_csv / "out.docx").exists()
-        assert "Use at most 7 column(s)" in capsys.readouterr().out
+        assert "Use at most 6 column(s)" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

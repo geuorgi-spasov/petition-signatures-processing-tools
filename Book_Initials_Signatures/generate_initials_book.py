@@ -44,11 +44,17 @@ OUTPUT_DOCX = "book_signatures_initials.docx"
 
 # The font must be installed on your system. The exact name has to match
 # what your OS reports for the installed font. The bundled file
-# `bebasneuecyrillic.ttf` registers itself as "Bebas Neue Cyrillic".
-FONT_NAME = "Bebas Neue Cyrillic"
+# `oswald.ttf` registers itself as "Oswald".
+#
+# Oswald is used rather than a narrower display face because it carries
+# the full Bulgarian alphabet and is licensed under the SIL Open Font
+# License (see OFL.txt), which permits bundling it here and embedding it
+# in the document. Narrower faces exist, but the condensed Cyrillic ones
+# are not free to redistribute.
+FONT_NAME = "Oswald"
 FONT_SIZE_PT = 10.0
 
-COLUMNS = 7           # sets of initials next to each other on one line
+COLUMNS = 6           # sets of initials next to each other on one line
 MARGIN_CM = 1.5       # offset from all four page edges
 COLUMN_GAP_CM = 1.0   # distance between the initials on a line
 LINE_SPACING = 1.2    # line height as a multiple of the font size
@@ -67,11 +73,15 @@ POINTS_PER_CM = 72 / 2.54  # 1 cm = 28.35 pt
 # Standard sizes, only so that messages can name the page the reader chose
 NAMED_PAGE_SIZES = {"A4": (21.0, 29.7), "A5": (14.8, 21.0)}
 
-# A set of initials is at most "И. И." — five characters. In Bebas Neue
-# Cyrillic one character is about 0.42 of the font size wide, so one set is
-# 5 × 0.42 × font size wide. Raise 0.42 if you switch to a wider font.
+# A set of initials is at most "И. И." — five characters. The number
+# below is the width of the widest of them, "И", as a fraction of the
+# font size: 0.545 in Oswald, measured from the bundled file. A set is
+# budgeted as 5 × that, which is deliberately generous - the dots and
+# the space are far narrower, so "И. И." really takes about 1.3 em, not
+# 2.7. Change this if you change the font; the column count follows from
+# it, and getting it too low is what makes initials collide.
 LONGEST_INITIALS = 5
-CHARACTER_WIDTH_EM = 0.42
+CHARACTER_WIDTH_EM = 0.545
 
 # Separators and encodings tried when auto-detecting the CSV format.
 #

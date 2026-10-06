@@ -2,7 +2,7 @@
 
 A single Python script that turns a CSV of signatory names into a
 printable A5 book listing just their initials (e.g. `И. И.`), in the
-**Bebas Neue Cyrillic** font, laid out in several columns per line.
+**Oswald** font, laid out in several columns per line.
 
 The layout is yours to choose: the page size (**A5** by default — half an
 A4 sheet, the usual book format), how many sets of initials go on one line
@@ -37,7 +37,7 @@ Follow **one** of the two paths below — whichever matches your computer.
 
 1. **Install Python** from <https://www.python.org/downloads/>, ticking
    *"Add Python to PATH"* during the installation.
-2. **Install the font:** double-click `bebasneuecyrillic.ttf` in this
+2. **Install the font:** double-click `oswald.ttf` in this
    folder and press *Install*.
 3. **Put your `book_signatures_only_names.csv` in this folder.**
 4. **Double-click `run-windows.bat`.**
@@ -53,7 +53,7 @@ Follow **one** of the two paths below — whichever matches your computer.
 2. **Install the font:**
 
    ```
-   mkdir -p ~/.local/share/fonts && cp bebasneuecyrillic.ttf ~/.local/share/fonts/ && fc-cache -f
+   mkdir -p ~/.local/share/fonts && cp oswald.ttf ~/.local/share/fonts/ && fc-cache -f
    ```
 
 3. **Put your `book_signatures_only_names.csv` in this folder.**
@@ -98,17 +98,16 @@ to whichever program prints it, and they differ a little.
 
 ## Installing the font
 
-The font file `bebasneuecyrillic.ttf` is bundled in this folder. After
-installing, it registers itself on your system as **`Bebas Neue
-Cyrillic`** — that is the exact name the script looks for.
+The font file `oswald.ttf` is bundled in this folder. After
+installing, it registers itself on your system as **`Oswald`** — that is the exact name the script looks for.
 
 ### Windows
 
-The simplest way is to double-click `bebasneuecyrillic.ttf` and press
+The simplest way is to double-click `oswald.ttf` and press
 **Install**. Or, from PowerShell in this folder:
 
 ```
-Start-Process .\bebasneuecyrillic.ttf
+Start-Process .\oswald.ttf
 ```
 
 …then press **Install** in the window that opens.
@@ -119,7 +118,7 @@ Double-click the file and press **Install Font**, or from Terminal in
 this folder:
 
 ```
-cp bebasneuecyrillic.ttf ~/Library/Fonts/
+cp oswald.ttf ~/Library/Fonts/
 ```
 
 ### Linux
@@ -127,12 +126,12 @@ cp bebasneuecyrillic.ttf ~/Library/Fonts/
 From Terminal in this folder:
 
 ```
-mkdir -p ~/.local/share/fonts && cp bebasneuecyrillic.ttf ~/.local/share/fonts/ && fc-cache -f
+mkdir -p ~/.local/share/fonts && cp oswald.ttf ~/.local/share/fonts/ && fc-cache -f
 ```
 
 After installing, confirm the exact family name your system reports —
 on Linux it should match the `FONT_NAME` in the script
-(`Bebas Neue Cyrillic`):
+(`Oswald`):
 
 ```
 fc-list | grep -i bebas
@@ -160,23 +159,23 @@ Headers are *not* expected — the script reads from the very first row.
 
 ## What the output looks like
 
-An A5 book with 7 sets of initials per line:
+An A5 book with 6 sets of initials per line:
 
 ```
 И. И.    П. П.    М. М.    Г. Г.    А. А.    Н. Н.    С. С.
 Д. Д.    В. В.    Р. Р.    К. К.    Т. Т.    Б. Б.    Ж. Ж.
 ```
 
-Font: **Bebas Neue Cyrillic** at 10 pt, 1.5 cm offsets on all sides. On
+Font: **Oswald** at 10 pt, 1.5 cm offsets on all sides. On
 A5 that leaves an 11.8 × 18.0 cm text area, which holds 42 lines, so one
-page carries 7 × 42 = **294 sets of initials**.
+page carries 6 × 42 = **252 sets of initials**.
 
 Before building, the script prints the plan:
 
 ```
-Layout: A5, 7 column(s) x 42 line(s) = 294 initials per page
+Layout: A5, 6 column(s) x 42 line(s) = 252 initials per page
         10 pt font, 1.5 cm offsets, 1 cm between the initials, line spacing 1.2
-        110,942 initials -> 378 page(s)
+        110,942 initials -> 441 page(s)
 ```
 
 ---
@@ -194,14 +193,14 @@ Every setting can be changed in two ways — whichever you find easier:
 
 | Command line | In the file | Default | What it does |
 | --- | --- | --- | --- |
-| `--columns` | `COLUMNS` | `7` | Sets of initials next to each other on one line |
+| `--columns` | `COLUMNS` | `6` | Sets of initials next to each other on one line |
 | `--font-size` | `FONT_SIZE_PT` | `10` | Font size in points. Also decides how many lines fit on a page |
 | `--margin` | `MARGIN_CM` | `1.5` | Offset from all four page edges, in cm |
 | `--column-gap` | `COLUMN_GAP_CM` | `1.0` | Distance between the initials on a line, in cm |
 | `--line-spacing` | `LINE_SPACING` | `1.2` | Height of a line, as a multiple of the font size |
 | `--page-width` | `PAGE_WIDTH_CM` | `14.8` | Page width in cm (A5 is 14.8, A4 is 21.0) |
 | `--page-height` | `PAGE_HEIGHT_CM` | `21.0` | Page height in cm (A5 is 21.0, A4 is 29.7) |
-| `--font-name` | `FONT_NAME` | `Bebas Neue Cyrillic` | Font family, exactly as your system reports it |
+| `--font-name` | `FONT_NAME` | `Oswald` | Font family, exactly as your system reports it |
 | `--input`, `--output` | `INPUT_CSV`, `OUTPUT_DOCX` | see the script | The files to read and write |
 | `--dry-run` | — | off | Print the layout and the page count, write nothing |
 
@@ -226,12 +225,12 @@ use is split evenly on both sides.
 2. One line is `font size × line spacing` high: 10 × 1.2 = 12 pt. 18.0 cm
    is 510.2 pt, so **42 lines** fit.
 3. One line holds `--columns` sets of initials, so a page holds
-   7 × 42 = **294**, and the page count is the number of initials divided
+   6 × 42 = **252**, and the page count is the number of initials divided
    by that, rounded up.
 
 That number is an **estimate**. Word, Word on the web and LibreOffice each
 fit a slightly different number of lines on a page — Word fits two fewer
-than the arithmetic predicts on A5 — so treat it as "about 378 pages",
+than the arithmetic predicts on A5 — so treat it as "about 441 pages",
 not a guarantee. The document itself is unaffected: no page breaks are
 forced, so every page comes out as full as the program can make it.
 
@@ -240,7 +239,7 @@ pages**. For the ~111,000 names in the sample CSV:
 
 | Settings | Page | Initials per page | Pages |
 | --- | --- | --- | --- |
-| defaults (A5, 7 columns, 10 pt) | A5 | 294 | 378 |
+| defaults (A5, 6 columns, 10 pt) | A5 | 252 | 441 |
 | `--columns 5 --font-size 12` | A5 | 175 | 634 |
 | `--page-width 21 --page-height 29.7` | A4 | 441 | 252 |
 | `--columns 1` (one per line) | A5 | 42 | 2,642 |
@@ -251,7 +250,7 @@ Nothing is written and the script says what is wrong and what to change:
 
 ```
 ERROR: 20 column(s) of 10 pt initials with 1 cm between them need 33.8 cm, but only 11.8 cm are left between the 1.5 cm offsets on A5.
-Use at most 7 column(s), a smaller gap, a smaller font size, or smaller offsets.
+Use at most 6 column(s), a smaller gap, a smaller font size, or smaller offsets.
 ```
 
 The same happens when the offsets leave no room on the page, or when the
@@ -305,7 +304,8 @@ tests/test_generate_initials_book.py ....................    [100%]
 Unit tests can only prove the layout arithmetic is self-consistent. They
 cannot tell you how many lines Word will actually put on a page — and when
 the two disagree the book comes out wrong while every test still passes.
-That is how a 378-page book once became a 755-page one.
+That is how a 378-page book once became a 755-page one, back when the
+book was set in a narrower font and ran 7 columns to a line.
 
 `tests/check_rendering.py` closes that gap: it builds the book, has
 LibreOffice or Word turn it into a PDF, and compares the result with the
@@ -322,14 +322,14 @@ Rendering 20,000 initials with LibreOffice...
 lines on a page           42          42
 pages                     69          69
 
-Font: Bebas Neue Cyrillic — the real one.
+Font: Oswald — the real one.
 
 OK — +0% against the prediction, within the 10% allowed.
 ```
 
 It also says which font went into the PDF, because a page measured with a
 stand-in font is not the page that gets printed. On Linux it points
-fontconfig at the `bebasneuecyrillic.ttf` in this folder for the length of
+fontconfig at the `oswald.ttf` in this folder for the length of
 the conversion, so the check works whether or not the font was ever
 installed — nothing is added to your system.
 
@@ -377,7 +377,7 @@ python tests/benchmark_initials_book.py --limit 20000
   at all and so is only ever a guess. Re-save the CSV as UTF-8 and
   run it again.
 - **The initials look like rectangles or the font looks wrong** — the
-  Bebas Neue Cyrillic font isn't installed on your system. Install it
+  Oswald font isn't installed on your system. Install it
   using one of the commands above and re-run. If you're on Windows,
   close Word completely before re-running so it picks up the newly
   installed font.
@@ -411,7 +411,8 @@ diagnose it from the script and the message alone.
 Book_Initials_Signatures/
 ├── README.md
 ├── requirements.txt
-├── bebasneuecyrillic.ttf                   (bundled font, install once)
+├── oswald.ttf                              (bundled font, install once)
+├── OFL.txt                                 (the font's licence)
 ├── generate_initials_book.py
 ├── run-windows.bat                         (Windows: double-click it)
 ├── run-linux-macos.sh                      (Linux/macOS: ./run-linux-macos.sh)
