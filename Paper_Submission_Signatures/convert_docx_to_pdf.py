@@ -24,6 +24,13 @@ import shutil
 import sys
 import tempfile
 import time
+from collections.abc import Callable
+
+# What every conversion backend looks like from the outside: it takes a
+# source and a destination, and it accepts either two file paths or two
+# folder paths. docx2pdf works both ways and _libreoffice_convert below
+# was written to match, which is what makes one batch call possible.
+Converter = Callable[[str, str], None]
 
 # Note: ``docx2pdf`` is imported lazily inside ``main()`` so that this module
 # can be imported (and its pure functions unit-tested) on machines without
@@ -52,6 +59,11 @@ def is_word_lock_file(filename: str) -> bool:
     return filename.startswith("~$")
 
 
+def pdf_name_for(docx_filename: str) -> str:
+    """The PDF a .docx becomes: the same name, with a .pdf extension."""
+    return os.path.splitext(docx_filename)[0] + ".pdf"
+
+
 def discover_conversion_jobs(
     input_folder: str, output_folder: str
 ) -> tuple[list[str], list[str], list[str]]:
@@ -71,7 +83,7 @@ def discover_conversion_jobs(
         if is_word_lock_file(filename):
             skipped_lock_files.append(filename)
             continue
-        pdf_path = os.path.join(output_folder, filename[:-5] + ".pdf")
+        pdf_path = os.path.join(output_folder, pdf_name_for(filename))
         if os.path.exists(pdf_path):
             already_converted.append(filename)
         else:
@@ -91,8 +103,8 @@ def verify_conversion_results(
     successful: list[str] = []
     failed: list[str] = []
     for filename in pending:
-        pdf_name = filename[:-5] + ".pdf"
-        if os.path.exists(os.path.join(output_folder, pdf_name)):
+        if os.path.exists(os.path.join(output_folder,
+                                        pdf_name_for(filename))):
             successful.append(filename)
         else:
             failed.append(filename)
@@ -335,16 +347,101 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def report_lock_files(lock_files: list[str]) -> None:
+    """Say which files were skipped because Word still has them open."""
+    if not lock_files:
+        return
+    print(f"Skipping {len(lock_files)} Word lock file(s) — "
+          f"close Microsoft Word if you still have documents open:")
+    for name in lock_files:
+        print(f"  - {name}")
+    print()
+
+
+def convert_pending(
+    convert: Converter, pending: list[str],
+    input_folder: str, output_folder: str,
+) -> None:
+    """Convert ``pending`` into ``output_folder``, in one batch if it can.
+
+    The files are copied into a single staging folder first so the
+    converter can be handed one directory and started once. That is the
+    difference between minutes and an hour: the startup cost of Word or
+    LibreOffice dominates, and a batch pays it once.
+
+    Both strategies read from that same staging copy, which is why the
+    fallback runs here, inside the staging folder's lifetime, rather than
+    being called separately by main().
+    """
+    with tempfile.TemporaryDirectory() as staging:
+        for filename in pending:
+            shutil.copy(os.path.join(input_folder, filename),
+                        os.path.join(staging, filename))
+
+        if not _convert_as_one_batch(convert, len(pending), staging,
+                                     output_folder):
+            _convert_one_at_a_time(convert, pending, staging, output_folder)
+
+
+def _convert_as_one_batch(
+    convert: Converter, count: int, staging: str, output_folder: str,
+) -> bool:
+    """Convert the whole staging folder in one call. False if it failed."""
+    print(f"Converting {count} file(s) in a single batch "
+          f"(Word / LibreOffice opens once)...")
+    try:
+        convert(staging, output_folder)
+        return True
+    except Exception as exc:
+        print(f"\nBatch conversion failed: {exc}")
+        return False
+
+
+def _convert_one_at_a_time(
+    convert: Converter, pending: list[str], staging: str, output_folder: str,
+) -> None:
+    """Convert each file alone, so one bad file blocks only itself."""
+    print("Retrying each file individually...\n")
+    for filename in pending:
+        source = os.path.join(staging, filename)
+        destination = os.path.join(output_folder, pdf_name_for(filename))
+        try:
+            convert(source, destination)
+            print(f"  OK: {filename}")
+        except Exception as exc:
+            print(f"  FAIL: {filename} — {exc}")
+
+
+def report_results(
+    pending: list[str], already_converted: list[str],
+    output_folder: str, elapsed: float,
+) -> None:
+    """Say how it went: what converted, what was skipped, what failed."""
+    successful, failed = verify_conversion_results(pending, output_folder)
+
+    # No per-file figure when nothing converted: dividing the whole run by
+    # one file would report the entire elapsed time as the cost of a file
+    # that was never produced.
+    rate = f" (~{elapsed / len(successful):.2f}s per file)" if successful else ""
+
+    print(f"\nDone in {elapsed:.1f}s{rate}. "
+          f"Converted: {len(successful)}, skipped: {len(already_converted)}, "
+          f"failed: {len(failed)}.")
+    if failed:
+        print("Failed files:")
+        for filename in failed:
+            print(f"  - {filename}")
+    print(f"PDFs are in '{output_folder}/'.")
+
+
 def main(argv: list[str] | None = None) -> None:
     args = build_arg_parser().parse_args(argv)
     convert = get_converter(args.prefer)
 
     if not os.path.isdir(args.input):
         print(f"ERROR: folder '{args.input}' not found.")
-        print(
-            "Run 'split_signatures_into_folders.py' first, or create the "
-            "folder and put .docx files inside it."
-        )
+        print("Run 'split_signatures_into_folders.py' first, or create the "
+              "folder and put .docx files inside it.")
         sys.exit(1)
 
     os.makedirs(args.output, exist_ok=True)
@@ -352,85 +449,25 @@ def main(argv: list[str] | None = None) -> None:
     pending, already_converted, lock_files = discover_conversion_jobs(
         args.input, args.output
     )
-    real_files = len(pending) + len(already_converted)
+    report_lock_files(lock_files)
 
-    if lock_files:
-        print(
-            f"Skipping {len(lock_files)} Word lock file(s) — "
-            f"close Microsoft Word if you still have documents open:"
-        )
-        for name in lock_files:
-            print(f"  - {name}")
-        print()
-
-    if real_files == 0:
+    found = len(pending) + len(already_converted)
+    if found == 0:
         print(f"No .docx files found in '{args.input}'.")
         return
-
     if not pending:
-        print(
-            f"All {real_files} file(s) in '{args.input}' are already "
-            f"converted. Nothing to do."
-        )
+        print(f"All {found} file(s) in '{args.input}' are already converted. "
+              f"Nothing to do.")
         return
 
-    print(
-        f"Found {real_files} .docx file(s) in '{args.input}' "
-        f"({len(already_converted)} already converted, "
-        f"{len(pending)} pending).\n"
-    )
+    print(f"Found {found} .docx file(s) in '{args.input}' "
+          f"({len(already_converted)} already converted, "
+          f"{len(pending)} pending).\n")
 
     start = time.perf_counter()
-
-    # Stage only the pending files in a temp folder, then convert that
-    # folder in one shot. This is dramatically faster than calling
-    # convert() per file because Word/LibreOffice starts up only once.
-    with tempfile.TemporaryDirectory() as staging:
-        for filename in pending:
-            shutil.copy(
-                os.path.join(args.input, filename),
-                os.path.join(staging, filename),
-            )
-
-        batch_ok = True
-        print(
-            f"Converting {len(pending)} file(s) in a single batch "
-            f"(Word / LibreOffice opens once)..."
-        )
-        try:
-            convert(staging, args.output)
-        except Exception as exc:
-            batch_ok = False
-            print(f"\nBatch conversion failed: {exc}")
-
-        # If batch mode crashed, fall back to converting each file
-        # individually so one bad file doesn't block the rest.
-        if not batch_ok:
-            print("Retrying each file individually...\n")
-            for filename in pending:
-                src = os.path.join(staging, filename)
-                dst = os.path.join(args.output, filename[:-5] + ".pdf")
-                try:
-                    convert(src, dst)
-                    print(f"  OK: {filename}")
-                except Exception as file_exc:
-                    print(f"  FAIL: {filename} — {file_exc}")
-
-    elapsed = time.perf_counter() - start
-    successful, failed = verify_conversion_results(pending, args.output)
-
-    per_file = elapsed / max(1, len(successful))
-    print(
-        f"\nDone in {elapsed:.1f}s "
-        f"(~{per_file:.2f}s per file). "
-        f"Converted: {len(successful)}, skipped: {len(already_converted)}, "
-        f"failed: {len(failed)}."
-    )
-    if failed:
-        print("Failed files:")
-        for filename in failed:
-            print(f"  - {filename}")
-    print(f"PDFs are in '{args.output}/'.")
+    convert_pending(convert, pending, args.input, args.output)
+    report_results(pending, already_converted, args.output,
+                   time.perf_counter() - start)
 
 
 if __name__ == "__main__":

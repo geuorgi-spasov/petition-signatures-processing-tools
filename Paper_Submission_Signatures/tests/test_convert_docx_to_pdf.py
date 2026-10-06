@@ -1,12 +1,15 @@
 """Tests for convert_docx_to_pdf.py.
 
-The actual .docx → .pdf conversion is delegated to ``docx2pdf``, which
-requires Microsoft Word or LibreOffice. We don't test that here; instead
-we test the pure helpers: file discovery, lock-file filtering, and
-post-conversion verification.
+Driving Microsoft Word or LibreOffice for real is not something a test
+can do, so the backends themselves are not tested here. Everything
+around them is: file discovery, lock-file filtering, post-conversion
+verification, which backend gets chosen — and the batch-then-fallback
+strategy, which takes the converter as an argument and so can be handed
+one that fails on purpose.
 """
 from __future__ import annotations
 
+import os
 import sys
 import types
 
@@ -14,8 +17,10 @@ import pytest
 
 import convert_docx_to_pdf as converter
 from convert_docx_to_pdf import (
+    convert_pending,
     discover_conversion_jobs,
     is_word_lock_file,
+    pdf_name_for,
     verify_conversion_results,
 )
 
@@ -163,6 +168,126 @@ class TestVerifyConversionResults:
         )
         assert successful == ["Папка 1 с подписи от 1 до 1000.docx"]
         assert failed == ["Папка 2 с подписи от 1001 до 2000.docx"]
+
+
+# ---------------------------------------------------------------------------
+# pdf_name_for
+# ---------------------------------------------------------------------------
+
+class TestPdfNameFor:
+    @pytest.mark.parametrize("docx,pdf", [
+        ("Папка 1.docx", "Папка 1.pdf"),
+        ("MIXED.DOCX", "MIXED.pdf"),
+        ("two.dots.docx", "two.dots.pdf"),
+    ])
+    def test_the_extension_is_replaced_and_the_name_kept(self, docx, pdf):
+        assert pdf_name_for(docx) == pdf
+
+
+# ---------------------------------------------------------------------------
+# convert_pending — the batch, and the fallback when the batch fails
+# ---------------------------------------------------------------------------
+
+class FakeConverter:
+    """A stand-in for Word or LibreOffice that records how it was called.
+
+    The real backends need an installed office suite, which is why this
+    path had no test until it was lifted out of main(). This one writes
+    empty PDFs where the real one would write real ones, and can be told
+    to fail on the batch call, on one named file, or on both.
+    """
+
+    def __init__(self, fail_batch=False, corrupt=()):
+        self.fail_batch = fail_batch
+        self.corrupt = set(corrupt)
+        self.calls: list[str] = []
+
+    def __call__(self, source: str, destination: str) -> None:
+        self.calls.append(source)
+        if os.path.isdir(source):
+            if self.fail_batch:
+                raise RuntimeError("Word stopped responding")
+            for name in os.listdir(source):
+                open(os.path.join(destination, pdf_name_for(name)), "w").close()
+            return
+        if os.path.basename(source) in self.corrupt:
+            raise RuntimeError("file is corrupt")
+        open(destination, "w").close()
+
+
+class TestConvertPending:
+    def _run(self, folders, convert, names):
+        convert_pending(convert, list(names),
+                        str(folders.input), str(folders.output))
+
+    def _pdfs(self, folders):
+        return sorted(path.name for path in folders.output.iterdir())
+
+    def test_one_batch_call_converts_everything(self, folders):
+        folders.add_docx("a.docx", "b.docx", "c.docx")
+        convert = FakeConverter()
+
+        self._run(folders, convert, ["a.docx", "b.docx", "c.docx"])
+
+        assert len(convert.calls) == 1, "the batch should be a single call"
+        assert self._pdfs(folders) == ["a.pdf", "b.pdf", "c.pdf"]
+
+    def test_a_failed_batch_retries_each_file(self, folders):
+        folders.add_docx("a.docx", "b.docx", "c.docx")
+        convert = FakeConverter(fail_batch=True)
+
+        self._run(folders, convert, ["a.docx", "b.docx", "c.docx"])
+
+        # one batch attempt, then one call per file
+        assert len(convert.calls) == 4
+        assert self._pdfs(folders) == ["a.pdf", "b.pdf", "c.pdf"]
+
+    def test_one_bad_file_does_not_block_the_others(self, folders):
+        # The whole reason the fallback exists: a batch is all-or-nothing,
+        # so a single unreadable document would otherwise cost the lot.
+        folders.add_docx("a.docx", "b.docx", "c.docx")
+        convert = FakeConverter(fail_batch=True, corrupt=["b.docx"])
+
+        self._run(folders, convert, ["a.docx", "b.docx", "c.docx"])
+
+        assert self._pdfs(folders) == ["a.pdf", "c.pdf"]
+
+    def test_the_originals_are_only_read(self, folders):
+        # Staging exists so the converter never opens the input folder;
+        # on Windows it would leave lock files in it if it did.
+        folders.add_docx("a.docx", "b.docx")
+        convert = FakeConverter()
+
+        self._run(folders, convert, ["a.docx", "b.docx"])
+
+        assert sorted(path.name for path in folders.input.iterdir()) == [
+            "a.docx", "b.docx"
+        ]
+
+    def test_the_converter_is_handed_a_staging_copy_not_the_input(self, folders):
+        folders.add_docx("a.docx")
+        convert = FakeConverter()
+
+        self._run(folders, convert, ["a.docx"])
+
+        assert convert.calls[0] != str(folders.input)
+
+    def test_the_staging_folder_is_cleaned_up(self, folders):
+        folders.add_docx("a.docx")
+        convert = FakeConverter()
+
+        self._run(folders, convert, ["a.docx"])
+
+        assert not os.path.exists(convert.calls[0])
+
+    def test_nothing_pending_converts_nothing(self, folders):
+        convert = FakeConverter()
+
+        self._run(folders, convert, [])
+
+        # The batch call still happens, on an empty folder, and the real
+        # backends treat that as a no-op rather than an error.
+        assert self._pdfs(folders) == []
 
 
 # ---------------------------------------------------------------------------
