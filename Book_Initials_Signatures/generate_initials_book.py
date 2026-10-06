@@ -73,6 +73,10 @@ POINTS_PER_CM = 72 / 2.54  # 1 cm = 28.35 pt
 # Standard sizes, only so that messages can name the page the reader chose
 NAMED_PAGE_SIZES = {"A4": (21.0, 29.7), "A5": (14.8, 21.0)}
 
+# Half a millimetre. A5 is 5.83 x 8.27 inches, which comes to
+# 14.81 x 21.01 cm, and a page asked for in those terms is still A5.
+PAGE_SIZE_TOLERANCE_CM = 0.05
+
 # A set of initials is at most "И. И." — five characters. The number
 # below is the width of the widest of them, "И", as a fraction of the
 # font size: 0.545 in Oswald, measured from the bundled file. A set is
@@ -119,6 +123,11 @@ CSV_ENCODINGS = ["utf-8", "cp1251", "latin-1"]
 LAST_RESORT_ENCODING = "latin-1"
 
 
+def _about(measured_cm: float, named_cm: float) -> bool:
+    """Whether a measurement is a named size, to within the tolerance."""
+    return abs(measured_cm - named_cm) < PAGE_SIZE_TOLERANCE_CM
+
+
 class LayoutError(ValueError):
     """Raised when a layout cannot be printed on the chosen page size."""
 
@@ -149,8 +158,8 @@ class Layout:
     def page_name(self) -> str:
         """The page size as a reader would name it: 'A5', '13 x 20 cm'."""
         for name, (width, height) in NAMED_PAGE_SIZES.items():
-            if (abs(self.page_width_cm - width) < 0.05
-                    and abs(self.page_height_cm - height) < 0.05):
+            if (_about(self.page_width_cm, width)
+                    and _about(self.page_height_cm, height)):
                 return name
         return f"{self.page_width_cm:g} x {self.page_height_cm:g} cm"
 
