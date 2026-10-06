@@ -10,16 +10,18 @@ from split_signatures_into_folders import (
     CSV_SEPARATORS,
     DEFAULT_COLUMN_WIDTHS_CM,
     FOOTER_FONT_SIZE_PT,
-    FOOTER_LINES,
     FOOTER_LINE_SPACING,
-    FOOTER_SPACE_BEFORE_PT,
     INPUT_CSV,
+    PAGE_BREAK_LINE_PT,
     PAGE_HEIGHT_CM,
     PAGE_SAFETY_MARGIN_CM,
     POINTS_PER_CM,
     ROW_HEIGHT_CM,
     TOP_MARGIN_CM,
-    footer_block_cm,
+    ORGANIZATION_NAME,
+    WORD_BODY_HEIGHT_CM,
+    body_height_cm,
+    page_break_line_cm,
     LEFT_MARGIN_CM,
     OUTPUT_DOCX_FOLDER,
     PAGE_WIDTH_CM,
@@ -149,88 +151,96 @@ class TestBuildFolderDocument:
 
 
 # ---------------------------------------------------------------------------
-# The page's height is the program's to decide, not the renderer's
+# The footer is in the margin, where it cannot move the table
 # ---------------------------------------------------------------------------
 
-class TestNothingOnThePageIsLeftToTheRenderer:
+class TestTheFooterIsInThePageMargin:
     """The bug these exist for.
 
-    The table was pinned to the millimetre with EXACTLY row heights while
-    the footer's spacing was left unset, so whatever opened the document
-    chose it. LibreOffice chose small enough to fit; Word chose larger,
-    the footer moved onto a page of its own, and a 100-page folder opened
-    as 199. The declared page count is printed in that very footer, so
-    the one thing this toolkit may not get wrong was decided elsewhere.
+    The footer used to be a paragraph in the body, after each table, and
+    so it competed with the table for the body's height. Word allows the
+    body less height than the margins imply, the footer lost, and a
+    100-page folder opened as 199 with every footer on a page of its own.
+    Pinning its spacing was not enough - the footer had to leave the body.
     """
 
-    def _page(self):
-        rows = pd.DataFrame({name: ["x"] * 20 for name in
-                             ["Номер", "Име", "Фамилия", "Имейл", "Дата", "Шифър"]})
-        doc, _ = build_folder_document(1, rows, list(rows.columns),
-                                      scale_column_widths(6))
-        return doc
+    def _doc(self, folder_number=3, rows=25):
+        frame = pd.DataFrame({name: ["x"] * rows for name in
+                              ["Номер", "Име", "Фамилия", "Имейл", "Дата", "Шифър"]})
+        doc, pages = build_folder_document(folder_number, frame,
+                                          list(frame.columns),
+                                          scale_column_widths(6))
+        return doc, pages
 
-    def test_every_paragraph_has_a_line_height_of_its_own(self):
-        # Including the one that only carries a page break: its line box
-        # sits on the page it ends, so its height is part of the page.
-        doc = self._page()
-        assert doc.paragraphs, "no body paragraphs to check"
+    def test_the_body_holds_only_tables_and_page_breaks(self):
+        doc, pages = self._doc()
+        # One break between each pair of pages, and nothing else.
+        assert len(doc.paragraphs) == pages - 1
+        for paragraph in doc.paragraphs:
+            assert 'type="page"' in paragraph._p.xml
+
+    def test_the_footer_text_is_in_the_section_footer(self):
+        doc, _ = self._doc()
+        footer = doc.sections[0].footer
+        assert not footer.is_linked_to_previous
+        assert "папка 3" in footer.paragraphs[0].text
+        assert footer.paragraphs[1].text == ORGANIZATION_NAME
+
+    def test_the_page_number_is_a_field_not_a_number(self):
+        # The renderer counts the pages. That is the number the footer was
+        # promising all along.
+        doc, _ = self._doc()
+        assert "PAGE" in doc.sections[0].footer.paragraphs[0]._p.xml
+
+    def test_the_numbering_starts_where_the_previous_folder_stopped(self):
+        from docx.oxml.ns import qn
+        for folder, expected in [(1, "1"), (2, "101"), (3, "201"), (111, "11001")]:
+            doc, _ = self._doc(folder_number=folder, rows=10)
+            start = doc.sections[0]._sectPr.find(qn("w:pgNumType"))
+            assert start.get(qn("w:start")) == expected, folder
+
+    def test_the_section_properties_stay_in_schema_order(self):
+        # pgNumType has to sit after pgMar and before cols, or Word
+        # rejects the file outright.
+        doc, _ = self._doc()
+        tags = [child.tag.split("}")[-1] for child in doc.sections[0]._sectPr]
+        assert tags.index("pgMar") < tags.index("pgNumType") < tags.index("cols")
+
+    def test_the_page_break_paragraph_is_a_hairline(self):
+        doc, _ = self._doc()
         for paragraph in doc.paragraphs:
             spacing = paragraph.paragraph_format
-            assert spacing.line_spacing is not None, paragraph.text[:30]
-            assert spacing.space_after.pt == 0, paragraph.text[:30]
-
-    def test_the_line_height_is_the_footer_font_times_its_spacing(self):
-        # Compared in points: a Length is stored in EMU, and the same
-        # 14.4 pt built twice can land one EMU apart.
-        doc = self._page()
-        expected = FOOTER_FONT_SIZE_PT * FOOTER_LINE_SPACING
-        for paragraph in doc.paragraphs:
-            assert paragraph.paragraph_format.line_spacing.pt == (
-                pytest.approx(expected)
-            )
-
-    def test_the_footer_does_not_open_with_a_blank_line(self):
-        # It used to, for the gap above it. The gap is space_before now,
-        # which is a number the arithmetic can count.
-        doc = self._page()
-        footer = doc.paragraphs[0]
-        assert footer._p.xml.count("<w:br") == 1, "one break, between the runs"
-        assert footer.paragraph_format.space_before.pt == (
-            pytest.approx(FOOTER_SPACE_BEFORE_PT)
-        )
-
-    def test_the_page_break_paragraph_is_pinned_too(self):
-        doc = self._page()
-        breaks = [p for p in doc.paragraphs if 'type="page"' in p._p.xml]
-        assert breaks, "a 20-row folder should carry one page break"
-        for paragraph in breaks:
-            assert paragraph.paragraph_format.line_spacing is not None
-            assert paragraph.paragraph_format.space_after.pt == 0
+            assert spacing.line_spacing.pt == pytest.approx(PAGE_BREAK_LINE_PT)
+            assert spacing.space_after.pt == 0
 
 
-class TestFooterBlockIsDerived:
-    def test_it_is_the_lines_plus_the_gap_above_them(self):
-        points = (FOOTER_SPACE_BEFORE_PT
-                  + FOOTER_LINES * FOOTER_FONT_SIZE_PT * FOOTER_LINE_SPACING)
-        assert footer_block_cm() == pytest.approx(points / POINTS_PER_CM)
+class TestTheBodyBudget:
+    def test_the_stricter_of_the_two_accounts_wins(self):
+        by_the_margins = PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
+        assert body_height_cm() == min(by_the_margins, WORD_BODY_HEIGHT_CM)
 
-    def test_it_counts_the_page_break_paragraph_as_one_of_its_lines(self):
-        # Two printed lines and the paragraph carrying the break.
-        assert FOOTER_LINES == 3
+    def test_word_is_the_stricter_one(self):
+        # Measured: Word allows the body less than the margins imply. If
+        # this ever stops being true the measurement has gone stale.
+        assert WORD_BODY_HEIGHT_CM < (PAGE_HEIGHT_CM - TOP_MARGIN_CM
+                                      - BOTTOM_MARGIN_CM)
 
     def test_the_default_page_keeps_the_safety_margin_in_hand(self):
-        usable = PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
         table = (ROWS_PER_PAGE + 1) * ROW_HEIGHT_CM
-        spare = usable - table - footer_block_cm()
+        spare = body_height_cm() - table - page_break_line_cm()
         assert spare >= PAGE_SAFETY_MARGIN_CM, (
             f"only {spare:.2f} cm spare, less than the "
             f"{PAGE_SAFETY_MARGIN_CM} cm meant to be left over"
         )
 
     def test_one_more_row_would_eat_the_margin(self):
-        # Which is why the cap is where it is.
         assert not fits_on_the_page(ROWS_PER_PAGE + 1)
+
+    def test_the_break_paragraph_costs_almost_nothing(self):
+        assert page_break_line_cm() == pytest.approx(
+            PAGE_BREAK_LINE_PT / POINTS_PER_CM
+        )
+        assert page_break_line_cm() < 0.05
 
 
 # ---------------------------------------------------------------------------

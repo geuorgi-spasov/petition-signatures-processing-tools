@@ -70,9 +70,29 @@ BOTTOM_MARGIN_CM = 2.0
 # the page break, whose own line box sits on the page before the break.
 POINTS_PER_CM = 72 / 2.54   # a point is 1/72 inch, an inch is 2.54 cm
 
-FOOTER_LINES = 3
 FOOTER_LINE_SPACING = 1.2
-FOOTER_SPACE_BEFORE_PT = 6   # the gap the blank line used to provide
+
+# How much height the body of a page really has, as opposed to how much
+# the margins say it has.
+#
+# The margins say 21.0 - 1.5 - 2.0 = 17.5 cm. Word disagrees, and we know
+# by how much only as a bracket. Measured in Word for the web on
+# 2026-10-06, with the footer still in the body: at 9 rows a page it
+# accepted 14.74 cm of content (a 13.0 cm table plus a 1.74 cm footer),
+# and at 10 rows it refused 16.04 cm and moved the footer to a page of
+# its own, turning a 100-page folder into 199. So its body lies somewhere
+# in [14.74, 16.04) cm and the nominal figure is too generous by at least
+# 1.46 cm. LibreOffice, for its part, accepts the nominal figure.
+#
+# The lower end of the bracket is what the arithmetic uses, because the
+# document has to be right in both. Re-measure if the page size, the
+# margins or the Word version change.
+WORD_BODY_HEIGHT_CM = 14.74
+
+# The paragraph that carries a page break still occupies a line on the
+# page it ends, and it shows nothing, so it is given the smallest line
+# the format allows rather than a text-sized one.
+PAGE_BREAK_LINE_PT = 1
 
 # Renderers round, and a page that fits to the last fraction of a
 # millimetre in one will not in another. This is the room left over on
@@ -153,25 +173,36 @@ def in_blocks_of(rows: pd.DataFrame, size: int) -> Iterator[pd.DataFrame]:
         yield rows.iloc[start:start + size]
 
 
-def footer_block_cm() -> float:
-    """The height the footer and the page break take off every page."""
-    points = (FOOTER_SPACE_BEFORE_PT
-              + FOOTER_LINES * FOOTER_FONT_SIZE_PT * FOOTER_LINE_SPACING)
-    return points / POINTS_PER_CM
+def body_height_cm() -> float:
+    """The height a page's body has, by the stricter of the two accounts.
+
+    The margins' own arithmetic, and what Word was measured to allow. The
+    document has to come out right in both, so the smaller wins.
+    """
+    by_the_margins = PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
+    return min(by_the_margins, WORD_BODY_HEIGHT_CM)
+
+
+def page_break_line_cm() -> float:
+    """The height the page-break paragraph takes off the page it ends."""
+    return PAGE_BREAK_LINE_PT / POINTS_PER_CM
 
 
 def max_rows_per_page() -> int:
-    """How many data rows fit between the top and bottom offsets.
+    """How many data rows fit in the body of a page.
 
     One row is ROW_HEIGHT_CM high and the header row takes one more, so
-    this is the usable height - less the footer, less the room left over
-    on purpose - divided by the row height, less that header. It is the
-    same arithmetic the page breaks rely on: if more rows are asked for
-    than this, the table runs off the page and the declared page count
-    stops matching the rendered one.
+    this is the body height - less the page-break paragraph, less the
+    room left over on purpose - divided by the row height, less that
+    header. It is the same arithmetic the page breaks rely on: if more
+    rows are asked for than this, the table runs off the page and the
+    declared page count stops matching the rendered one.
+
+    The footer is not in here any more. It lives in the bottom margin
+    now, where it cannot take height from the body at all.
     """
-    usable_cm = (PAGE_HEIGHT_CM - TOP_MARGIN_CM - BOTTOM_MARGIN_CM
-                 - footer_block_cm() - PAGE_SAFETY_MARGIN_CM)
+    usable_cm = (body_height_cm() - page_break_line_cm()
+                 - PAGE_SAFETY_MARGIN_CM)
     return int(usable_cm // ROW_HEIGHT_CM) - 1
 
 
@@ -357,41 +388,108 @@ def add_page_table(
 
 
 def pin_footer_spacing(paragraph) -> None:
-    """Fix a footer paragraph's height so no renderer can choose it."""
+    """Fix a paragraph's height so no renderer gets to choose it."""
     spacing = paragraph.paragraph_format
     spacing.space_before = Pt(0)
     spacing.space_after = Pt(0)
     spacing.line_spacing = Pt(FOOTER_FONT_SIZE_PT * FOOTER_LINE_SPACING)
 
 
-def add_page_footer(
-    doc: DocumentType, global_page_number: int, folder_number: int
-) -> None:
-    """Write the per-page footer: page/folder info, then the org name.
+def shrink_to_a_hairline(paragraph) -> None:
+    """Give a paragraph the smallest line it can have, and no spacing.
 
-    Its spacing is set here rather than left to the renderer. The table
-    above it has EXACTLY row heights, so its height is the same
-    everywhere; a footer whose line spacing came from whatever opened the
-    document made the page as a whole renderer-dependent, and the page
-    count is a promise printed in this very footer.
+    For the paragraph that carries a page break: it is structure, not
+    content, and a text-sized line box of it is height the table could
+    have used.
     """
-    footer = doc.add_paragraph()
-    footer.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    pin_footer_spacing(footer)
-    footer.paragraph_format.space_before = Pt(FOOTER_SPACE_BEFORE_PT)
+    spacing = paragraph.paragraph_format
+    spacing.space_before = Pt(0)
+    spacing.space_after = Pt(0)
+    spacing.line_spacing = Pt(PAGE_BREAK_LINE_PT)
+    for run in paragraph.runs:
+        run.font.size = Pt(PAGE_BREAK_LINE_PT)
 
-    info_run = footer.add_run(
-        f"Стр. {global_page_number}, папка {folder_number}"
-    )
-    info_run.font.name = FOOTER_FONT
-    info_run.font.size = Pt(FOOTER_FONT_SIZE_PT)
-    info_run.italic = True
-    info_run.add_break()
 
-    org_run = footer.add_run(ORGANIZATION_NAME)
-    org_run.font.name = FOOTER_FONT
-    org_run.font.size = Pt(FOOTER_FONT_SIZE_PT)
-    org_run.italic = True
+def set_start_page_number(section, first_page: int) -> None:
+    """Make this document's pages start numbering at ``first_page``.
+
+    The footer prints a PAGE field rather than a number the program works
+    out, so the renderer counts the pages - and this is how the count
+    carries on from where the previous file stopped.
+
+    python-docx has no setter for it, and a sectPr's children have to be
+    in schema order: pgNumType goes after pgMar and before cols.
+    """
+    sectPr = section._sectPr
+    for existing in sectPr.findall(qn("w:pgNumType")):
+        sectPr.remove(existing)
+    pgNumType = OxmlElement("w:pgNumType")
+    pgNumType.set(qn("w:start"), str(first_page))
+    cols = sectPr.find(qn("w:cols"))
+    if cols is not None:
+        cols.addprevious(pgNumType)
+    else:
+        sectPr.append(pgNumType)
+
+
+def add_page_number_field(paragraph) -> None:
+    """Append a Word PAGE field — the page's own number, as it renders."""
+    run = paragraph.add_run()
+    begin = OxmlElement("w:fldChar")
+    begin.set(qn("w:fldCharType"), "begin")
+    instruction = OxmlElement("w:instrText")
+    instruction.set(qn("xml:space"), "preserve")
+    instruction.text = " PAGE "
+    end = OxmlElement("w:fldChar")
+    end.set(qn("w:fldCharType"), "end")
+    for element in (begin, instruction, end):
+        run._r.append(element)
+    run.font.name = FOOTER_FONT
+    run.font.size = Pt(FOOTER_FONT_SIZE_PT)
+    run.italic = True
+
+
+def write_section_footer(doc: DocumentType, folder_number: int,
+                         first_page: int) -> None:
+    """Put the page/folder line and the organisation into the page footer.
+
+    It used to be a paragraph in the body, after each table, with the
+    page number worked out here and written as text. That made the footer
+    compete with the table for the body's height, and it lost: Word
+    allows the body less height than the margins imply, so the footer was
+    pushed onto a page of its own and a 100-page folder opened as 199.
+
+    A real footer sits in the bottom margin. It cannot take height from
+    the body, so it cannot move the table or the page breaks, and the
+    numbering it prints is the renderer's own count - which is the number
+    that was being promised all along.
+    """
+    set_start_page_number(doc.sections[0], first_page)
+
+    footer = doc.sections[0].footer
+    footer.is_linked_to_previous = False
+
+    line = footer.paragraphs[0]
+    line.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    pin_footer_spacing(line)
+
+    before = line.add_run("Стр. ")
+    after = line.add_run(f", папка {folder_number}")
+    add_page_number_field(line)
+    # The field was appended after both runs; put it between them.
+    before._r.addnext(line.runs[-1]._r)
+    for run in (before, after):
+        run.font.name = FOOTER_FONT
+        run.font.size = Pt(FOOTER_FONT_SIZE_PT)
+        run.italic = True
+
+    organisation = footer.add_paragraph()
+    organisation.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    pin_footer_spacing(organisation)
+    name = organisation.add_run(ORGANIZATION_NAME)
+    name.font.name = FOOTER_FONT
+    name.font.size = Pt(FOOTER_FONT_SIZE_PT)
+    name.italic = True
 
 
 def build_folder_document(
@@ -408,18 +506,20 @@ def build_folder_document(
     pages_in_file = math.ceil(len(folder_rows) / rows_per_page)
     # Pages in a *full* folder — used so page numbering continues across files
     pages_per_full_folder = math.ceil(rows_per_file / rows_per_page)
+    first_page = 1 + (folder_number - 1) * pages_per_full_folder
+
+    # Once, for the whole document: the footer is the section's, so every
+    # page gets it without anything being added to the body.
+    write_section_footer(doc, folder_number, first_page)
 
     for page_num, page_rows in enumerate(
             in_blocks_of(folder_rows, rows_per_page), start=1):
         add_page_table(doc, header, page_rows, column_widths)
 
-        global_page = page_num + (folder_number - 1) * pages_per_full_folder
-        add_page_footer(doc, global_page, folder_number)
-
         if page_num < pages_in_file:
-            # Its own paragraph, whose line box sits on the page it ends,
-            # so it is counted in footer_block_cm() and pinned like the rest.
-            pin_footer_spacing(doc.add_page_break())
+            # This paragraph shows nothing but still occupies a line on
+            # the page it ends, so it gets the smallest line there is.
+            shrink_to_a_hairline(doc.add_page_break())
 
     return doc, pages_in_file
 
