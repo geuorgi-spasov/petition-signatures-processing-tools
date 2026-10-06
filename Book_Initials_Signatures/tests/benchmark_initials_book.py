@@ -2,14 +2,18 @@
 Compares how long the document takes to build with different numbers of
 columns, and how many pages each one produces.
 
-One line of the document is one paragraph, so 7 columns means 7× fewer
+One line of the document is one paragraph, so 6 columns means 6× fewer
 paragraphs than 1 column — and the number of paragraphs is what the build
 time depends on.
+
+6 is the most that fits on A5 in Oswald, so it is the last of the defaults
+below. Asking for more is not an error: the layout refuses it and says how
+much width it would have needed, which is the useful answer.
 
 Usage:
     python tests/benchmark_initials_book.py
     python tests/benchmark_initials_book.py --limit 20000
-    python tests/benchmark_initials_book.py --columns 1 7 10 --column-gap 1.0
+    python tests/benchmark_initials_book.py --columns 1 6 10 --column-gap 1.0
 """
 
 from __future__ import annotations
@@ -51,7 +55,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Benchmark the column layouts.")
     parser.add_argument("--input", default=INPUT_CSV, help="CSV of names")
     parser.add_argument("--limit", type=int, help="Use only the first N initials")
-    parser.add_argument("--columns", type=int, nargs="+", default=[1, 3, 5, 7],
+    parser.add_argument("--columns", type=int, nargs="+", default=[1, 3, 5, 6],
                         help="Column counts to compare")
     parser.add_argument("--column-gap", type=float, default=COLUMN_GAP_CM,
                         help="Distance between the initials, in cm")
