@@ -51,13 +51,49 @@ from convert_docx_to_pdf import get_converter  # noqa: E402
 
 
 def count_pdf_pages(path: str) -> int:
-    """Count a PDF's pages without needing any extra library."""
+    """Count a PDF's pages without needing any extra library.
+
+    /Type /Page marks a page object and nothing else, so it is counted
+    first. /Count is the fallback for the one case that defeats it - a
+    writer that packs its page objects into compressed object streams,
+    where the bytes are not there to be found. /Count is not the first
+    choice because it is not page-specific: an outline (bookmark) tree
+    carries one too, and on a file with bookmarks the largest /Count in
+    the file can be the number of bookmarks rather than of pages.
+    """
     with open(path, "rb") as handle:
         data = handle.read()
+    page_objects = len(re.findall(rb"/Type\s*/Page[^s]", data))
+    if page_objects:
+        return page_objects
     counts = [int(n) for n in re.findall(rb"/Count\s+(\d+)", data)]
-    if counts:
-        return max(counts)
-    return len(re.findall(rb"/Type\s*/Page[^s]", data))
+    return max(counts) if counts else 0
+
+
+# Fonts built to another font's character widths on purpose, so a line
+# set in the key occupies the same width when drawn in the value. These
+# are the only substitutions that leave a measured layout intact.
+# Anything else the renderer reaches for is a coverage fallback - chosen
+# for having the characters, not for matching the widths.
+METRIC_SUBSTITUTES = {
+    "Arial": ("LiberationSans",),
+    "Cambria": ("Caladea",),
+}
+
+
+def family_of(pdf_font_name: str) -> str:
+    """``'Caladea-Italic'`` -> ``'Caladea'``: a PDF names the face."""
+    return pdf_font_name.split("-")[0]
+
+
+def keeps_the_widths(family: str, wanted: tuple[str, ...]) -> bool:
+    """Whether ``family`` draws at the widths one of ``wanted`` would."""
+    for font in wanted:
+        if family.lower() == font.replace(" ", "").lower():
+            return True
+        if family in METRIC_SUBSTITUTES.get(font, ()):
+            return True
+    return False
 
 
 def fonts_in_pdf(path: str) -> set[str]:
@@ -129,17 +165,30 @@ def main() -> int:
     print(f"{'signatures a page':20}{args.rows_per_page:>10}"
           f"{rendered_rows_per_page:>10.1f}")
 
-    missing = [font for font in (BODY_FONT, FOOTER_FONT)
-               if not any(font.replace(" ", "").lower() == name.lower()
-                          for name in embedded)]
+    wanted = (BODY_FONT, FOOTER_FONT)
+    families = {family_of(name) for name in embedded}
+    missing = [font for font in wanted
+               if not any(family.lower() == font.replace(" ", "").lower()
+                          for family in families)]
+    no_width_promise = sorted(family for family in families
+                              if not keeps_the_widths(family, wanted))
+
     print()
-    if missing:
+    if not missing:
+        print(f"Fonts: {BODY_FONT} and {FOOTER_FONT} — the real ones.")
+    else:
         print(f"Fonts: {' and '.join(missing)} not available here — the PDF "
               f"contains {', '.join(sorted(embedded))}.")
-        print("Those stand-ins have the same character widths, so the layout "
-              "holds, but the letters are drawn differently.")
-    else:
-        print(f"Fonts: {BODY_FONT} and {FOOTER_FONT} — the real ones.")
+        if no_width_promise:
+            print(f"{', '.join(no_width_promise)}: not a width-for-width "
+                  f"stand-in for anything asked for. The renderer reached "
+                  f"for it to cover characters the stand-in itself lacks, so "
+                  f"wherever it is used the widths are not the ones measured "
+                  f"here.")
+        else:
+            print("Each of those was built to the same character widths as "
+                  "the font it stands in for, so the layout holds - only the "
+                  "letters are drawn differently.")
 
     print()
     if actual_pages != declared_pages:

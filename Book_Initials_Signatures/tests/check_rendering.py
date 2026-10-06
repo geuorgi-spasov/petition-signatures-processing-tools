@@ -17,7 +17,8 @@ What it reports:
     pages            predicted, against the PDF's own page count
 
 A few percent of difference between programs is normal and fine. A large
-one means the document will not come out as intended, and the check fails.
+one in either direction means the document will not come out as intended,
+and the check fails - too few pages is as much a surprise as too many.
 
 Usage:
     python tests/check_rendering.py
@@ -176,12 +177,22 @@ def convert_to_pdf(kind: str, path: str, docx: str, out_dir: str) -> str:
 
 
 def count_pdf_pages(path: str) -> int:
-    """Count the pages of a PDF without needing any extra library."""
+    """Count the pages of a PDF without needing any extra library.
+
+    /Type /Page marks a page object and nothing else, so it is counted
+    first. /Count is the fallback for the one case that defeats it - a
+    writer that packs its page objects into compressed object streams,
+    where the bytes are not there to be found. /Count is not the first
+    choice because it is not page-specific: an outline (bookmark) tree
+    carries one too, and on a file with bookmarks the largest /Count in
+    the file can be the number of bookmarks rather than of pages.
+    """
     data = pathlib_read(path)
+    page_objects = len(re.findall(rb"/Type\s*/Page[^s]", data))
+    if page_objects:
+        return page_objects
     counts = [int(n) for n in re.findall(rb"/Count\s+(\d+)", data)]
-    if counts:
-        return max(counts)
-    return len(re.findall(rb"/Type\s*/Page[^s]", data))
+    return max(counts) if counts else 0
 
 
 def pathlib_read(path: str) -> bytes:
@@ -313,9 +324,10 @@ def main() -> int:
 
     overshoot = (actual_pages - predicted_pages) / predicted_pages
     print()
-    if overshoot > TOLERANCE:
-        print(f"FAILED — {overshoot:.0%} more pages than predicted. This "
-              f"program fits {implied} lines on a page, not "
+    if abs(overshoot) > TOLERANCE:
+        more_or_fewer = "more" if overshoot > 0 else "fewer"
+        print(f"FAILED — {abs(overshoot):.0%} {more_or_fewer} pages than "
+              f"predicted. This program fits {implied} lines on a page, not "
               f"{layout.lines_per_page}.")
         return 1
     print(f"OK — {overshoot:+.0%} against the prediction, within the "
