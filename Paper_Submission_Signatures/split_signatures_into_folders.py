@@ -71,14 +71,18 @@ DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 
 # Separators and encodings tried when auto-detecting the CSV format.
 #
-# Separators are ordered by how unlikely each is to turn up inside a
-# field. A separator cannot fail the way an encoding can: if a field
-# contains the character being tried, that split also yields more than
-# one column and wins, silently, and the column count cannot tell the
-# two apart. A tab or a pipe effectively never appears inside a field,
-# a semicolon rarely, and a comma most readily of the four - so the
-# comma goes last. This export contains none of them, so the order
-# guards a future file rather than fixing this one.
+# Separators are ordered least-likely-to-appear-inside-a-field first.
+# A separator cannot fail the way an encoding can: if a field holds the
+# character being tried, that split also yields more than one column and
+# wins, silently, and the column count cannot tell the two splits apart.
+#
+# The order is a judgement, not a measurement. None of the four appears
+# anywhere in the current export, so 110,942 rows rule them out equally
+# and cannot rank them. What that sample does show is that fields are
+# not clean - '?', '.', '-', digits, an apostrophe, an ellipsis, '%',
+# ':' and '@' all turn up inside names - so none of these is a "never".
+# A pipe is merely the least plausible of the four, then a semicolon,
+# then a tab, and a comma by far the most likely, so it is tried last.
 #
 # The first encoding that decodes the file wins, so the order is what makes
 # this correct rather than merely successful. An encoding earns a place here
@@ -102,7 +106,7 @@ DEFAULT_COLUMN_WIDTHS_CM = [1.8, 3.45, 3.7, 8.75, 3.35, 3.0]
 # it would only suggest a coverage that is not there. The same goes for
 # cp1252 and iso-8859-1, which latin-1 shadows completely (iso-8859-1 is
 # not even a different codec - Python resolves both names to the same one).
-CSV_SEPARATORS = ["\t", "|", ";", ","]
+CSV_SEPARATORS = ["|", ";", "\t", ","]
 CSV_ENCODINGS = ["utf-8", "cp1251", "latin-1"]
 LAST_RESORT_ENCODING = "latin-1"
 
