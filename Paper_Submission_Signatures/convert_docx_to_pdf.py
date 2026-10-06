@@ -20,7 +20,9 @@ from __future__ import annotations
 import argparse
 import glob
 import os
+import pathlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -187,6 +189,45 @@ def _find_libreoffice() -> str | None:
     return None
 
 
+def _run_libreoffice(soffice: str, out_dir: str, sources: list[str]) -> None:
+    """Convert ``sources`` into ``out_dir``, and say why if it fails.
+
+    Two things this does that the bare call did not.
+
+    It gives the run its own LibreOffice profile, in a temporary folder.
+    LibreOffice keeps one profile per user and a second instance will not
+    start while another holds it - including a window the person happens
+    to have open - which on Windows is the usual reason a headless
+    conversion exits 1 having printed its complaint to stderr.
+
+    And it keeps that complaint. Both streams used to go to DEVNULL, so a
+    failure arrived as a CalledProcessError carrying the command and no
+    cause, which is what made this unreadable the first time it happened
+    on Windows.
+    """
+    with tempfile.TemporaryDirectory(prefix="soffice-profile-") as profile:
+        result = subprocess.run(
+            [soffice,
+             f"-env:UserInstallation={pathlib.Path(profile).as_uri()}",
+             "--headless", "--convert-to", "pdf", "--outdir", out_dir,
+             *sources],
+            capture_output=True,
+        )
+
+    if result.returncode != 0:
+        # Whatever encoding it used, we want the words, not an exception
+        # about the words.
+        said = (result.stderr or result.stdout or b"")
+        detail = said.decode("utf-8", "replace").strip()
+        raise RuntimeError(
+            f"LibreOffice could not convert the document "
+            f"(exit {result.returncode}).\n"
+            f"{detail or 'It printed nothing at all.'}\n"
+            f"If LibreOffice is open on this machine, closing it and "
+            f"running again is the usual fix."
+        )
+
+
 def _libreoffice_convert(src: str, dst: str) -> None:
     """Convert a .docx (file) or folder of .docx to PDF using LibreOffice.
 
@@ -194,8 +235,6 @@ def _libreoffice_convert(src: str, dst: str) -> None:
     .docx inside it is converted into ``dst`` (also a directory); if
     ``src`` is a single file, it is converted to the single file ``dst``.
     """
-    import subprocess
-
     soffice = _find_libreoffice()
     if soffice is None:
         raise RuntimeError(
@@ -214,23 +253,11 @@ def _libreoffice_convert(src: str, dst: str) -> None:
         if not docx_files:
             return
         # One invocation converts the whole batch — LibreOffice starts once.
-        subprocess.run(
-            [soffice, "--headless", "--convert-to", "pdf", "--outdir",
-             out_dir, *docx_files],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        _run_libreoffice(soffice, out_dir, docx_files)
     else:
         out_dir = os.path.dirname(dst) or "."
         os.makedirs(out_dir, exist_ok=True)
-        subprocess.run(
-            [soffice, "--headless", "--convert-to", "pdf", "--outdir",
-             out_dir, src],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        _run_libreoffice(soffice, out_dir, [src])
         # LibreOffice names the output after the input stem; rename if the
         # caller asked for a specific destination name.
         produced = os.path.join(

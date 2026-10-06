@@ -39,6 +39,7 @@ import contextlib
 import glob
 import io
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -200,11 +201,28 @@ def fonts_in_pdf(path: str) -> set[str]:
 def convert_to_pdf(kind: str, path: str, docx: str, out_dir: str) -> str:
     """Convert ``docx`` to a PDF in ``out_dir`` and return the PDF's path."""
     if kind == "libreoffice":
-        subprocess.run(
-            [path, "--headless", "--convert-to", "pdf", "--outdir", out_dir, docx],
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        # Its own profile, because LibreOffice will not start a second
+        # instance while another holds the shared one - a window the
+        # person has open is enough - and its output is kept, because a
+        # failure with the cause thrown away is not a failure you can
+        # read.
+        profile = os.path.join(out_dir, "soffice-profile")
+        result = subprocess.run(
+            [path,
+             f"-env:UserInstallation={pathlib.Path(profile).as_uri()}",
+             "--headless", "--convert-to", "pdf", "--outdir", out_dir, docx],
+            capture_output=True,
             env=font_environment(out_dir),
         )
+        if result.returncode != 0:
+            said = (result.stderr or result.stdout or b"")
+            raise RuntimeError(
+                f"LibreOffice could not convert the document "
+                f"(exit {result.returncode}).\n"
+                f"{said.decode('utf-8', 'replace').strip() or 'It printed nothing.'}\n"
+                f"If LibreOffice is open on this machine, closing it and "
+                f"running again is the usual fix."
+            )
     else:
         from docx2pdf import convert
         convert(docx, os.path.join(out_dir, "book.pdf"))
