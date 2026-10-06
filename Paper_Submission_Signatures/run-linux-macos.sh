@@ -1,8 +1,8 @@
 #!/bin/sh
 # Turns the raw CSV of signatures into Word files and then PDFs.
 #
-#   ./run.sh                 do the whole job: CSV -> .docx files -> PDFs
-#   ./run.sh --libreoffice   ... converting with LibreOffice (faster)
+#   ./run-linux-macos.sh                 the whole job: CSV -> .docx -> PDFs
+#   ./run-linux-macos.sh --libreoffice   ... with LibreOffice (faster)
 #
 # The first run sets everything up, which takes a minute; later runs skip
 # straight to the work.

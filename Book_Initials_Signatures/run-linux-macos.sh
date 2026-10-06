@@ -1,8 +1,8 @@
 #!/bin/sh
 # Builds the book of initials.
 #
-#   ./run.sh              build the book
-#   ./run.sh --dry-run    only report the layout and the page count
+#   ./run-linux-macos.sh              build the book
+#   ./run-linux-macos.sh --dry-run    only report the layout and the page count
 #
 # The first run sets everything up, which takes a minute; later runs skip
 # straight to building.
